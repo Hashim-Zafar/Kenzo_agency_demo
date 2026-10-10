@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+/* Placeholder palette pulled from the mascot. Swap for the Claude Design system tokens. */
+@theme {
+  --color-kenzo-50: #f7f3fd;
+  --color-kenzo-100: #ede4fb;
+  --color-kenzo-200: #dccaf6;
+  --color-kenzo-500: #9b6fd6;
+  --color-kenzo-600: #8152c4;
+  --color-kenzo-700: #6a3fa6;
+
+  --color-ink-900: #1d1726;
+  --color-ink-700: #4a4256;
+  --color-ink-500: #7b7387;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+body {
+  background: var(--color-kenzo-50);
+  color: var(--color-ink-900);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
