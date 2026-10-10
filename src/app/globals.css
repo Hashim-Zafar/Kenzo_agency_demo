@@ -1,25 +1,186 @@
 @import "tailwindcss";
 
-/* Placeholder palette pulled from the mascot. Swap for the Claude Design system tokens. */
+/* =====================================================================
+   KENZO DESIGN TOKENS — change values here and the whole site follows.
+   Values come from the Kenzo design system (Claude Design). Components
+   only ever use the ROLES in section 2, never the raw palette.
+   ===================================================================== */
+
+/* 1. Raw palette + non-colour knobs */
+:root {
+  /* Palette (Kenzo design system) */
+  --ink: #14162b;
+  --ink-raised: #1f2240;
+  --offwhite: #f7f6f2;
+  --white: #ffffff;
+  --indigo-50: #f1f1fa;
+  --indigo-100: #e3e4f6;
+  --indigo-200: #c7c9ec;
+  --indigo-300: #a3a7e0;
+  --indigo-500: #4f56c4;
+  --indigo-600: #464cac;
+  --indigo-700: #3c4293;
+  --slate-50: #f5f5f6;
+  --slate-100: #eaebed;
+  --slate-200: #d6d7db;
+  --slate-300: #b8bac2;
+  --slate-400: #898c99;
+  --slate-500: #6b6f80;
+  --slate-600: #5a5d6f;
+  --slate-700: #484b5e;
+  --lime-300: #d7f25c;
+  --success-50: #ebf6ef;
+  --success-700: #17603c;
+  --warning-50: #fdf4e3;
+  --warning-700: #8a4f00;
+  --error-50: #fbecec;
+  --error-700: #a51f1f;
+
+  /* Border widths */
+  --border-width-default: 1px;
+  --border-width-strong: 2px;
+  --border-width-focus: 2px;
+
+  /* Depth: how far things lift off the page (0 = flat, 3 = floating) */
+  --depth-0: none;
+  --depth-1: 0 1px 2px rgb(20 22 43 / 0.06);
+  --depth-2: 0 6px 16px -4px rgb(20 22 43 / 0.12), 0 2px 4px rgb(20 22 43 / 0.04);
+  --depth-3: 0 24px 48px -12px rgb(20 22 43 / 0.24), 0 4px 12px rgb(20 22 43 / 0.06);
+
+  /* Which depth each surface uses — swap a level here to test */
+  --depth-card: var(--depth-0);
+  --depth-option: var(--depth-0);
+  --depth-option-hover: var(--depth-1);
+  --depth-frame: var(--depth-2);
+  --depth-bubble: var(--depth-3);
+  --depth-dock: var(--depth-3);
+
+  /* Tour: spotlight + Kenzo */
+  --scrim: rgb(20 22 43 / 0.48);
+  --spotlight-padding: 8px;
+  --spotlight-radius: 14px;
+  --spotlight-ring: var(--indigo-300);
+  --spotlight-ring-width: 2px;
+  --bubble-width: 320px;
+  --mascot-height: 210px;
+  --mascot-gap: 16px;
+  --dock-avatar: 48px;
+
+  /* Layout */
+  --frame-max-width: 1000px;
+  --step-list-width: 260px;
+  --question-column: 560px;
+
+  /* Layers */
+  --z-frame: 1;
+  --z-scrim: 40;
+  --z-bubble: 50;
+  --z-popup: 60;
+
+  /* Motion */
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 450ms;
+}
+
+/* 2. Roles — these become Tailwind classes (bg-surface, text-fg-muted, rounded-card, shadow-bubble…) */
 @theme {
-  --color-kenzo-50: #f7f3fd;
-  --color-kenzo-100: #ede4fb;
-  --color-kenzo-200: #dccaf6;
-  --color-kenzo-500: #9b6fd6;
-  --color-kenzo-600: #8152c4;
-  --color-kenzo-700: #6a3fa6;
+  /* Surfaces */
+  --color-page: var(--offwhite);
+  --color-surface: var(--white);
+  --color-surface-muted: var(--slate-50);
+  --color-scene: color-mix(in srgb, var(--white) 60%, transparent);
+  --color-inverse: var(--ink);
+  --color-inverse-fg: var(--offwhite);
+  --color-inverse-muted: var(--slate-300);
 
-  --color-ink-900: #1d1726;
-  --color-ink-700: #4a4256;
-  --color-ink-500: #7b7387;
+  /* Text */
+  --color-fg: var(--ink);
+  --color-fg-muted: var(--slate-600);
+  --color-fg-subtle: var(--slate-500);
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  /* Brand / actions */
+  --color-brand: var(--ink);
+  --color-accent: var(--indigo-500);
+  --color-accent-hover: var(--indigo-600);
+  --color-accent-pressed: var(--indigo-700);
+  --color-accent-soft: var(--indigo-50);
+  --color-accent-soft-line: var(--indigo-200);
+  --color-accent-fg: var(--white);
+  --color-link: var(--indigo-500);
+  --color-highlight: var(--lime-300);
+
+  /* Lines */
+  --color-line: var(--slate-100);
+  --color-line-strong: var(--slate-200);
+  --color-control: var(--slate-400);
+  --color-focus: var(--indigo-500);
+
+  /* Progress */
+  --color-progress: var(--indigo-500);
+  --color-progress-track: var(--slate-200);
+
+  /* Conversation */
+  --color-lead-bubble: var(--indigo-500);
+  --color-lead-bubble-fg: var(--white);
+  --color-answer: var(--indigo-50);
+  --color-answer-line: var(--indigo-200);
+
+  /* Status */
+  --color-notice-bg: var(--warning-50);
+  --color-notice-fg: var(--warning-700);
+  --color-success-bg: var(--success-50);
+  --color-success-fg: var(--success-700);
+  --color-danger-bg: var(--error-50);
+  --color-danger-fg: var(--error-700);
+
+  /* Fonts */
+  --font-sans: var(--font-aspekta), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-unbounded), var(--font-aspekta), system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+
+  /* Radii */
+  --radius-control: 999px; /* pills: reply box, send, tour buttons */
+  --radius-button: 8px; /* buttons, options */
+  --radius-card: 12px; /* cards, bubbles, answer boxes */
+  --radius-panel: 16px; /* large panels */
+  --radius-frame: 12px; /* browser frame around the lead UI */
+  --radius-tail: 4px; /* speech-bubble corner */
+
+  /* Shadows (point at the depth knobs above) */
+  --shadow-card: var(--depth-card);
+  --shadow-option: var(--depth-option);
+  --shadow-option-hover: var(--depth-option-hover);
+  --shadow-frame: var(--depth-frame);
+  --shadow-bubble: var(--depth-bubble);
+  --shadow-dock: var(--depth-dock);
+
+  /* Easing */
+  --ease-kenzo: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 3. Border utilities driven by the width tokens */
+@utility border-default {
+  border-width: var(--border-width-default);
+  border-color: var(--color-line);
+}
+@utility border-strong {
+  border-width: var(--border-width-strong);
+  border-color: var(--color-line-strong);
+}
+@utility border-control {
+  border-width: var(--border-width-default);
+  border-color: var(--color-control);
 }
 
 body {
-  background: var(--color-kenzo-50);
-  color: var(--color-ink-900);
+  background: var(--color-page);
+  color: var(--color-fg);
+}
+
+:focus-visible {
+  outline: var(--border-width-focus) solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

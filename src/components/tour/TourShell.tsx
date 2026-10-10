@@ -6,6 +6,11 @@ import type { Tour } from "@/lib/tour/types";
 import { Mascot } from "@/components/mascot/Mascot";
 import { Scene } from "./scenes";
 
+const btnPrimary =
+  "rounded-control bg-accent px-5 py-2.5 text-sm font-medium text-accent-fg transition duration-(--duration-fast) ease-kenzo hover:bg-accent-hover";
+const btnGhost =
+  "rounded-control px-5 py-2.5 text-sm font-medium text-fg-muted transition duration-(--duration-fast) ease-kenzo hover:bg-surface-muted disabled:opacity-30";
+
 export function TourShell({ tour }: { tour: Tour }) {
   const [index, setIndex] = useState(0);
   const total = tour.steps.length;
@@ -30,13 +35,13 @@ export function TourShell({ tour }: { tour: Tour }) {
   }, [go, index]);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-kenzo-50 text-ink-900">
+    <div className="flex min-h-dvh flex-col bg-page text-fg">
       {/* Header + progress */}
       <header className="flex items-center gap-4 px-4 pt-4 sm:px-8 sm:pt-6">
-        <Link href="/" className="font-semibold tracking-tight text-kenzo-700">
+        <Link href="/" className="font-display font-semibold tracking-tight text-brand">
           Kenzo
         </Link>
-        <span className="text-sm text-ink-500">{tour.title}</span>
+        <span className="text-sm text-fg-subtle">{tour.title}</span>
       </header>
 
       <nav aria-label="Tour progress" className="px-4 pt-4 sm:px-8">
@@ -50,13 +55,13 @@ export function TourShell({ tour }: { tour: Tour }) {
                 className="group flex w-full flex-col gap-1.5 text-left"
               >
                 <span
-                  className={`h-1.5 w-full rounded-full transition-colors ${
-                    i <= index ? "bg-kenzo-500" : "bg-kenzo-200"
+                  className={`h-1.5 w-full rounded-control transition-colors duration-(--duration-base) ease-kenzo ${
+                    i <= index ? "bg-progress" : "bg-progress-track"
                   }`}
                 />
                 <span
                   className={`hidden text-xs sm:block ${
-                    i === index ? "font-medium text-kenzo-700" : "text-ink-500"
+                    i === index ? "font-medium text-brand" : "text-fg-subtle"
                   }`}
                 >
                   {s.label}
@@ -82,38 +87,31 @@ export function TourShell({ tour }: { tour: Tour }) {
             priority
             className="w-20 shrink-0 sm:w-24 lg:order-2 lg:w-44"
           />
-          <div className="relative flex-1 rounded-2xl rounded-bl-sm bg-white p-4 text-[15px] leading-relaxed shadow-sm ring-1 ring-kenzo-100 lg:order-1 lg:flex-none lg:rounded-bl-2xl lg:p-5 lg:text-base">
+          <div className="relative flex-1 rounded-card rounded-bl-tail border-default bg-surface p-4 text-[15px] leading-relaxed shadow-bubble lg:order-1 lg:flex-none lg:rounded-bl-card lg:p-5 lg:text-base">
             {step.narration}
           </div>
         </aside>
       </main>
 
       {/* Controls */}
-      <footer className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-kenzo-100 bg-kenzo-50/90 px-4 py-3 backdrop-blur sm:px-8 sm:py-4">
+      <footer className="sticky bottom-0 flex items-center justify-between gap-3 border-t-(length:--border-width-default) border-line bg-page/90 px-4 py-3 backdrop-blur sm:px-8 sm:py-4">
         <button
           type="button"
           onClick={() => go(index - 1)}
           disabled={index === 0}
-          className="rounded-full px-5 py-2.5 text-sm font-medium text-ink-700 transition hover:bg-kenzo-100 disabled:opacity-30"
+          className={btnGhost}
         >
           Back
         </button>
-        <span className="text-xs text-ink-500 tabular-nums">
+        <span className="text-xs tabular-nums text-fg-subtle">
           {index + 1} / {total}
         </span>
         {isLast && tour.next ? (
-          <Link
-            href={tour.next.href}
-            className="rounded-full bg-kenzo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-kenzo-700"
-          >
+          <Link href={tour.next.href} className={btnPrimary}>
             {tour.next.label}
           </Link>
         ) : (
-          <button
-            type="button"
-            onClick={() => go(index + 1)}
-            className="rounded-full bg-kenzo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-kenzo-700"
-          >
+          <button type="button" onClick={() => go(index + 1)} className={btnPrimary}>
             Next
           </button>
         )}

@@ -17,11 +17,11 @@ const DESCRIPTIONS: Record<SceneKey, string> = {
 
 export function Scene({ scene, pending }: { scene: SceneKey; pending?: boolean }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-kenzo-200 bg-white/60 p-6 text-center">
-      <span className="font-mono text-xs uppercase tracking-widest text-kenzo-500">{scene}</span>
-      <p className="max-w-sm text-lg text-ink-700">{DESCRIPTIONS[scene]}</p>
+    <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-panel border-strong border-dashed bg-scene p-6 text-center">
+      <span className="font-mono text-xs uppercase tracking-widest text-progress">{scene}</span>
+      <p className="max-w-sm text-lg text-fg-muted">{DESCRIPTIONS[scene]}</p>
       {pending && (
-        <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
+        <span className="rounded-control bg-notice-bg px-3 py-1 text-xs font-medium text-notice-fg">
           Coming soon
         </span>
       )}
