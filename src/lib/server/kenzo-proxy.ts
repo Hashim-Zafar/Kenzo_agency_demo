@@ -21,20 +21,26 @@ const UPSTREAM_TIMEOUT_MS = 45_000;
 
 type DemoEnv = {
   apiUrl: string;
-  token: string;
+  token: string | null;
   agencyId: string;
   schemaName: string;
   emailDomain: string;
 };
 
+// Reserved for documentation (RFC 2606): no real person can own an address
+// here and nothing is ever delivered. The API only needs a valid-looking email.
+const DEFAULT_EMAIL_DOMAIN = "demo.example.com";
+
 function readEnv(): DemoEnv | null {
   const apiUrl = process.env.KENZO_API_URL;
-  const token = process.env.KENZO_INTERNAL_TOKEN;
+  const token = process.env.KENZO_INTERNAL_TOKEN || null;
   const agencyId = process.env.KENZO_DEMO_AGENCY_ID;
   const schemaName = process.env.KENZO_DEMO_SCHEMA;
-  const emailDomain = process.env.KENZO_DEMO_EMAIL_DOMAIN;
-  if (!apiUrl || !token || !agencyId || !schemaName || !emailDomain) return null;
+  const emailDomain = process.env.KENZO_DEMO_EMAIL_DOMAIN || DEFAULT_EMAIL_DOMAIN;
+  if (!apiUrl || !agencyId || !schemaName) return null;
   if (!UUID_RE.test(agencyId)) return null;
+  // Same rule as the API: the token may only be missing in development.
+  if (!token && process.env.NODE_ENV === "production") return null;
   return { apiUrl: apiUrl.replace(/\/+$/, ""), token, agencyId, schemaName, emailDomain };
 }
 
@@ -113,7 +119,7 @@ export async function callKenzo(
       method,
       headers: {
         "Content-Type": "application/json",
-        "X-Kenzo-Internal-Token": env.token,
+        ...(env.token ? { "X-Kenzo-Internal-Token": env.token } : {}),
         "X-Agency-ID": env.agencyId,
         "X-Schema-Name": env.schemaName,
       },
