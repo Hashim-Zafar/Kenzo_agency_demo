@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Mascot, type MascotPose } from "@/components/mascot/Mascot";
 import type { Hint } from "@/lib/tour/hints";
 
@@ -53,10 +53,23 @@ export function Guide({
   busy: boolean;
 }) {
   const mobile = useIsMobile();
-  const bubbleRef = useRef<HTMLDivElement>(null);
   const [rect, setRect] = useState<Rect | null>(null);
   const [size, setSize] = useState({ w: 320, h: 200 });
   const [viewport, setViewport] = useState({ w: 0, h: 0 });
+
+  // Measure the bubble whenever it exists (it may mount after the target is found).
+  const observer = useRef<ResizeObserver | null>(null);
+  const bubbleRef = useCallback((el: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!el) return;
+    const measure = () =>
+      setSize((s) => (s.w === el.offsetWidth && s.h === el.offsetHeight ? s : { w: el.offsetWidth, h: el.offsetHeight }));
+    measure();
+    observer.current = new ResizeObserver(measure);
+    observer.current.observe(el);
+  }, []);
+  useEffect(() => () => observer.current?.disconnect(), []);
 
   // Follow the target every frame (layout shifts, scrolling, the keyboard).
   useEffect(() => {
@@ -66,15 +79,28 @@ export function Guide({
     let last: Rect | null = null;
     let scrolled = false;
     const tick = () => {
-      const el = document.querySelector<HTMLElement>(`[data-tour="${hint.target}"]`);
+      // "a|b" lights up both targets as one area. For each name, the first
+      // visible match (some targets exist twice: desktop + phone).
+      const els = hint.target!
+        .split("|")
+        .map((name) =>
+          Array.from(document.querySelectorAll<HTMLElement>(`[data-tour="${name}"]`)).find(
+            (e) => e.offsetWidth > 0 && e.offsetHeight > 0,
+          ),
+        )
+        .filter((e): e is HTMLElement => Boolean(e));
       let next: Rect | null = null;
-      if (el) {
+      if (els.length) {
         if (!scrolled) {
-          el.scrollIntoView({ block: "center", behavior: "smooth" });
+          els[els.length - 1].scrollIntoView({ block: "center", behavior: "smooth" });
           scrolled = true;
         }
-        const r = el.getBoundingClientRect();
-        next = { top: r.top, left: r.left, width: r.width, height: r.height };
+        const rs = els.map((e) => e.getBoundingClientRect());
+        const top = Math.min(...rs.map((r) => r.top));
+        const left = Math.min(...rs.map((r) => r.left));
+        const bottom = Math.max(...rs.map((r) => r.bottom));
+        const right = Math.max(...rs.map((r) => r.right));
+        next = { top, left, width: right - left, height: bottom - top };
       }
       if (!sameRect(last, next)) {
         last = next;
@@ -89,15 +115,6 @@ export function Guide({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [hint.target, hint.id]);
-
-  // Measure the bubble so placement uses its real size.
-  useLayoutEffect(() => {
-    const el = bubbleRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setSize({ w: el.offsetWidth, h: el.offsetHeight }));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [hint.id, mobile]);
 
   const layout = rect && viewport.w > 0 ? place(rect, size, viewport, hint.pose, mobile) : null;
   const centred = !hint.target || !layout;

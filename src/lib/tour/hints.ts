@@ -1,12 +1,14 @@
 import type { ConversationState } from "@/lib/kenzo/useConversation";
+import type { AnswerValue, PublicQuestion } from "@/lib/kenzo/types";
+import { labelFor } from "@/lib/kenzo/useConversation";
 import type { MascotPose } from "@/components/mascot/Mascot";
 import { demoAgency } from "./demo-agency";
 
-/** What the guide does when its main button is pressed. */
-export type HintAction = "start" | "dismiss" | "pickFirst" | "typeSuggestion" | "restart";
+/** What the guide does when its button is pressed. */
+export type HintAction = "start" | "dismiss" | "pickForMe" | "typeForMe" | "restart";
 
 export type Hint = {
-  /** Each id is explained once; after that the guide steps back. */
+  /** Unique per moment; the guide re-aims when it changes. */
   id: string;
   /** data-tour value of the element to spotlight; null = centred card. */
   target: string | null;
@@ -19,17 +21,32 @@ export type Hint = {
   primary?: { label: string; action: HintAction };
 };
 
-/** Hints tied to a step disappear once the visitor acts on that step. */
-export const STEP_HINTS = new Set(["options", "typing", "confirm", "correction", "pursuit"]);
+export type HintContext = {
+  /** Reaction tips the visitor closed with "Got it". */
+  dismissed: ReadonlySet<string>;
+  /** What "Pick for me" selected on the step on screen (not sent yet). */
+  suggested: AnswerValue | null;
+  /** What's in the reply box right now. */
+  reply: string;
+};
 
-export function deriveHint(s: ConversationState, seen: ReadonlySet<string>): Hint | null {
+/**
+ * One guide per step. Order of precedence:
+ *   1. the conversation's own moments (intro, ending, limits, errors)
+ *   2. things waiting on the visitor (correction pop-up, below-minimum offer,
+ *      talking it through, confirming a value)
+ *   3. a reaction to the last turn (went off script, warning) until "Got it"
+ *   4. the step's own guide, which stays until the step is answered
+ */
+export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null {
+  /* ---- 1. the conversation's own moments ---- */
   if (s.phase === "idle") {
     return {
       id: "intro",
       target: null,
       pose: "present",
       title: "You're the customer now",
-      body: "This is the live Kenzo, not a recording. Answer however you like, and I'll show you what happens behind each step.",
+      body: "This is the live Kenzo, not a recording. I'll guide you through every step and show you what happens behind it.",
       primary: { label: "Start", action: "start" },
     };
   }
@@ -54,7 +71,6 @@ export function deriveHint(s: ConversationState, seen: ReadonlySet<string>): Hin
       primary: { label: "Try again", action: "restart" },
     };
   }
-
   if (s.outcome?.kind === "handoff") {
     return {
       id: "handoff",
@@ -81,113 +97,191 @@ export function deriveHint(s: ConversationState, seen: ReadonlySet<string>): Hin
 
   const view = s.view;
   const metric = s.stepMetric;
+  const index = s.questions.findIndex((q) => q.metric === metric);
+  const question = index >= 0 ? s.questions[index] : undefined;
+  if (!question || !metric) return null;
 
-  if (view?.pending_correction && !seen.has("correction")) {
+  /* ---- 2. waiting on the visitor ---- */
+  if (view?.pending_correction) {
     return {
-      id: "correction",
+      id: `correction:${s.turnNo}`,
       target: "correction",
       pose: "thinking",
       title: "They changed an earlier answer",
       body: "Kenzo never overwrites an answer on its own. It asks first, then re-checks the fit.",
-      waiting: "Waiting for your choice",
+      waiting: "Update or keep: your call",
     };
   }
 
-  const lastKinds = new Set(s.last.blocks.map((b) => b.kind));
-
-  if (lastKinds.has("pursuit_offer") && !seen.has("pursuit")) {
+  const pursuit = view?.active_pursuit?.metric === metric ? view.active_pursuit : null;
+  if (pursuit?.stage === "offered") {
     return {
-      id: "pursuit",
+      id: `pursuit-offer:${metric}`,
       target: "pursuit",
       pose: "present",
-      title: "Under your minimum, but not turned away",
-      body: `That answer is under ${demoAgency.minimumLabel}. Instead of a flat no, Kenzo offers to talk it through. The minimum comes from your settings.`,
-      waiting: "Waiting for your pick",
+      title: "Under the minimum, but not turned away",
+      body: `That's under ${demoAgency.minimumLabel}. Instead of a flat no, Kenzo offers to talk it through. The minimum comes from your settings.`,
+      waiting: "Pick either one to see where it goes",
     };
   }
-
-  if (view?.active_pursuit?.stage === "pursuing" && lastKinds.has("generated") && !seen.has("pursuing")) {
+  if (pursuit?.stage === "pursuing") {
     return {
-      id: "pursuing",
-      target: "thread-last",
+      id: `pursuing:${metric}`,
+      target: question.allows_text || question.answer_type === "text" ? "pursuit|reply" : "pursuit",
       pose: "point",
-      title: "Kenzo makes your case",
-      body: "It only uses offers you've set up, so it never promises something you don't sell.",
-      primary: { label: "Got it", action: "dismiss" },
+      title: "Talk it through with Kenzo",
+      body: "Ask what you'd get for your budget, or push back. Kenzo makes the agency's case using only offers they've set up. You can also tap one of its suggestions.",
+      waiting: "Waiting for your reply",
     };
   }
 
-  const wentOffScript =
+  if (s.prefill !== null) {
+    return {
+      id: `confirm:${metric}:${s.turnNo}`,
+      target: "confirm",
+      pose: "point",
+      title: "Kenzo checks before saving",
+      body: "When a typed answer could be read more than one way, it asks once instead of guessing.",
+      waiting: "Confirm it, or pick another answer",
+    };
+  }
+
+  /* ---- 3. reaction to the last turn ---- */
+  const lastKinds = new Set(s.last.blocks.map((b) => b.kind));
+  const offScript =
     (s.last.sent === "metric_text" || s.last.sent === "ask_kenzo") &&
     lastKinds.has("generated") &&
     !lastKinds.has("show_step");
-  if (wentOffScript && !seen.has("offscript")) {
+  const offScriptId = `offscript:${s.turnNo}`;
+  if (offScript && !ctx.dismissed.has(offScriptId)) {
     return {
-      id: "offscript",
+      id: offScriptId,
       target: "thread-last",
       pose: "thinking",
       title: "A question instead of an answer, that's fine",
-      body: "Kenzo answered from your own documents and kept their place. The question is still waiting.",
-      primary: { label: "Carry on", action: "dismiss" },
+      body: "Kenzo answered from the agency's own documents and kept their place. The question is still waiting.",
+      primary: { label: "Got it", action: "dismiss" },
     };
   }
-
   const warned = s.last.blocks.some((b) => b.kind === "message" && b.tone === "warning");
-  if (warned && !seen.has("warning")) {
+  const warnId = `warning:${s.turnNo}`;
+  if (warned && !ctx.dismissed.has(warnId)) {
     return {
-      id: "warning",
+      id: warnId,
       target: "thread-last",
       pose: "thinking",
       title: "Kenzo stays on track",
       body: "Off-topic or manipulative messages get a short, fixed reply. Nothing the lead typed is repeated back.",
-      primary: { label: "Carry on", action: "dismiss" },
+      primary: { label: "Got it", action: "dismiss" },
     };
   }
 
-  if (view?.pending_confirmation && view.pending_confirmation.metric === metric && !seen.has("confirm")) {
+  /* ---- 4. the step's own guide ---- */
+  return stepHint(s, question, index, ctx);
+}
+
+function stepHint(
+  s: ConversationState,
+  question: PublicQuestion,
+  index: number,
+  ctx: HintContext,
+): Hint {
+  const m = question.metric;
+  const hasOptions = question.options.length > 0 || question.answer_type === "boolean";
+  const multi = question.answer_type === "multi_choice";
+
+  // "Pick for me" filled something in: point at Continue.
+  if (ctx.suggested !== null && hasOptions) {
     return {
-      id: "confirm",
-      target: "confirm",
+      id: `step:${m}:picked`,
+      target: "continue",
       pose: "point",
-      title: "Kenzo checks before saving",
-      body: "When a typed answer could be read two ways, it asks once instead of guessing.",
-      waiting: "Waiting for you to confirm",
+      title: `I picked “${labelFor(question, ctx.suggested)}” for you`,
+      body: multi
+        ? "Add or remove options if you like, then press Continue to send."
+        : "Press Continue to send it, or tap a different option instead.",
+      waiting: "Waiting for you to continue",
     };
   }
 
-  const question = s.questions.find((q) => q.metric === metric);
-  if (!question) return null;
-
-  const typingStep =
-    demoAgency.typingMetric !== null
-      ? question.metric === demoAgency.typingMetric
-      : question.answer_type === "number" &&
-        question.metric === s.questions.find((q) => q.answer_type === "number")?.metric;
-  if (typingStep && question.allows_text && !seen.has("typing")) {
+  // The "type a budget under the minimum" showcase.
+  const typingMetric =
+    demoAgency.typingMetric ??
+    s.questions.find((q) => q.answer_type === "number" && q.allows_text)?.metric ??
+    null;
+  if (m === typingMetric && question.allows_text) {
+    const typed = ctx.reply.trim().length > 0;
     return {
-      id: "typing",
+      id: `step:${m}:${typed ? "typed" : "typing"}`,
       target: "reply",
       pose: "point",
-      title: "Leads don't have to tap",
-      body: `Try typing a budget under this agency's minimum of ${demoAgency.minimumLabel}.`,
-      suggestion: demoAgency.belowMinimumExample,
-      waiting: "Waiting for you to type",
-      primary: { label: "Type it for me", action: "typeSuggestion" },
+      title: typed ? "Now press send" : "Leads don't have to tap",
+      body: typed
+        ? "Kenzo reads typed answers like “2-3k” or “about £2k a month”, so leads can answer however they talk."
+        : `Try typing a budget under this agency's minimum of ${demoAgency.minimumLabel}, and see what Kenzo does.`,
+      suggestion: typed ? undefined : demoAgency.belowMinimumExample,
+      waiting: typed ? "Waiting for you to send" : "Waiting for you to type",
+      primary: typed ? undefined : { label: "Type it for me", action: "typeForMe" },
     };
   }
 
-  const hasOptions = question.options.length > 0 || question.answer_type === "boolean";
-  if (hasOptions && !seen.has("options")) {
+  // Free-text or number steps with no options.
+  if (!hasOptions) {
     return {
-      id: "options",
+      id: `step:${m}`,
+      target: "reply",
+      pose: "point",
+      title: "Answer in your own words",
+      body: "There's no format to get right. Kenzo works out what the lead meant.",
+      waiting: "Waiting for your answer",
+    };
+  }
+
+  // Option steps: each one shows off something different.
+  const pick = { label: "Pick for me", action: "pickForMe" as const };
+  if (index === 0) {
+    return {
+      id: `step:${m}`,
       target: "options",
       pose: "point",
       title: "No form, one question at a time",
-      body: "Pick any option. Each answer shapes what Kenzo asks next.",
+      body: multi
+        ? "Pick everything that applies, then press Continue. Each answer shapes what Kenzo asks next."
+        : "Pick any option. Each answer shapes what Kenzo asks next.",
       waiting: "Waiting for your pick",
-      primary: { label: "Pick for me", action: "pickFirst" },
+      primary: pick,
     };
   }
 
-  return null;
+  const features: Hint[] = [];
+  if (question.why_we_ask) {
+    features.push({
+      id: `step:${m}`,
+      target: "options",
+      pose: "point",
+      title: "Leads can see why you ask",
+      body: "“Why do I ask?” under the question gives your reason in your words. Leads answer more honestly when they know why.",
+      waiting: "Pick an answer when you're ready",
+      primary: pick,
+    });
+  }
+  features.push({
+    id: `step:${m}`,
+    target: "options",
+    pose: "point",
+    title: "Questions are welcome mid-flow",
+    body: "Try “Ask Kenzo”, or type a question in the reply box. Kenzo answers from your own documents, then brings them back to this step.",
+    waiting: "Ask something, or pick an answer",
+    primary: pick,
+  });
+  features.push({
+    id: `step:${m}`,
+    target: "options",
+    pose: "point",
+    title: multi ? "Pick everything that applies" : "Pick what fits",
+    body: "Every answer is checked against your criteria as it comes in, so a poor fit never reaches your calendar.",
+    waiting: "Waiting for your pick",
+    primary: pick,
+  });
+  return features[(index - 1) % features.length];
 }

@@ -8,36 +8,42 @@ import { useConversation } from "@/lib/kenzo/useConversation";
 import type { AnswerValue, ConversationAction, Interaction } from "@/lib/kenzo/types";
 import { deriveHint } from "@/lib/tour/hints";
 
-/** Hints that stay until the conversation itself moves on. */
-const PERSISTENT = new Set(["intro", "handoff", "ended", "limit", "error"]);
+/** Tips that show even with the guide hidden. */
+const ALWAYS = new Set(["intro", "handoff", "ended", "limit", "error"]);
 
 /** The agent walkthrough: the live Kenzo, with Kenzo the guide on top. */
 export function Walkthrough() {
   const { state, start, send, explain, closeWhy } = useConversation();
   const [reply, setReply] = useState("");
-  const [seen, setSeen] = useState<ReadonlySet<string>>(() => new Set());
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
   const [guideOn, setGuideOn] = useState(true);
+  // What "Pick for me" selected; shown, never sent until the visitor presses Continue.
+  const [suggestion, setSuggestion] = useState<{ metric: string; value: AnswerValue } | null>(null);
   const typingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const hint = deriveHint(state, seen);
-  const markSeen = useCallback((id: string) => setSeen((s) => new Set(s).add(id)), []);
+  const suggested =
+    suggestion && suggestion.metric === state.stepMetric ? suggestion.value : null;
+  const hint = deriveHint(state, { dismissed, suggested, reply });
 
-  useEffect(() => () => {
+  const stopTyping = () => {
     if (typingTimer.current) clearInterval(typingTimer.current);
-  }, []);
+    typingTimer.current = null;
+  };
+  useEffect(() => stopTyping, []);
 
-  /** Any move by the visitor retires the tip that was on screen. */
   const act = useCallback(
     (interaction: Interaction, opts?: { echo?: string; label?: string }) => {
-      if (hint && !PERSISTENT.has(hint.id)) markSeen(hint.id);
+      stopTyping();
+      setSuggestion(null);
       void send(interaction, opts);
     },
-    [hint, markSeen, send],
+    [send],
   );
 
   const restart = useCallback(() => {
-    if (typingTimer.current) clearInterval(typingTimer.current);
-    setSeen(new Set());
+    stopTyping();
+    setDismissed(new Set());
+    setSuggestion(null);
     setReply("");
     void start();
   }, [start]);
@@ -53,40 +59,35 @@ export function Walkthrough() {
         restart();
         break;
       case "dismiss":
-        markSeen(hint.id);
+        setDismissed((d) => new Set(d).add(hint.id));
         break;
-      case "pickFirst": {
+      case "pickForMe": {
         if (!question) return;
-        const first = question.options[0] ?? (question.answer_type === "boolean" ? { label: "Yes", value: true } : null);
+        const first =
+          question.options[0] ?? (question.answer_type === "boolean" ? { label: "Yes", value: true } : null);
         if (!first) return;
         const value: AnswerValue = question.answer_type === "multi_choice" ? [first.value] : first.value;
-        act({ type: "structured_answer", metric: question.metric, value }, { label: first.label });
+        setSuggestion({ metric: question.metric, value });
         break;
       }
-      case "typeSuggestion": {
+      case "typeForMe": {
         const text = hint.suggestion;
         if (!question || !text || typingTimer.current) return;
-        // Type it out so the visitor sees it's an ordinary message.
+        // Typed out letter by letter so it's clearly an ordinary message.
+        // It is NOT sent: the visitor presses send themselves.
         let i = 0;
         setReply("");
         typingTimer.current = setInterval(() => {
           i += 1;
           setReply(text.slice(0, i));
-          if (i >= text.length) {
-            clearInterval(typingTimer.current!);
-            typingTimer.current = null;
-            setTimeout(() => {
-              setReply("");
-              act({ type: "metric_text", metric: question.metric, message: text }, { echo: text });
-            }, 350);
-          }
+          if (i >= text.length) stopTyping();
         }, 40);
         break;
       }
     }
   };
 
-  const showGuide = hint && (guideOn || PERSISTENT.has(hint.id));
+  const showGuide = hint && (guideOn || ALWAYS.has(hint.id));
 
   return (
     <div className="flex min-h-dvh flex-col bg-page text-fg">
@@ -119,7 +120,11 @@ export function Walkthrough() {
         <LeadInterface
           state={state}
           reply={reply}
-          setReply={setReply}
+          setReply={(v) => {
+            stopTyping();
+            setReply(v);
+          }}
+          suggested={suggested}
           onAnswer={(metric, value, label) => act({ type: "structured_answer", metric, value }, { label })}
           onText={(metric, message) => act({ type: "metric_text", metric, message }, { echo: message })}
           onAsk={(message) => act({ type: "ask_kenzo", message }, { echo: message })}

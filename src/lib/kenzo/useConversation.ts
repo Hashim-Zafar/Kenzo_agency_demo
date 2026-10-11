@@ -46,6 +46,8 @@ export type ConversationState = {
   answers: Record<string, string>;
   outcome: Outcome;
   busy: boolean;
+  /** Counts answered turns, so a tip can belong to one turn. */
+  turnNo: number;
   /** The latest turn, for the tour to react to. */
   last: { sent: Interaction["type"] | null; blocks: Block[]; rejected: boolean };
 };
@@ -63,6 +65,7 @@ const initial: ConversationState = {
   answers: {},
   outcome: null,
   busy: false,
+  turnNo: 0,
   last: { sent: null, blocks: [], rejected: false },
 };
 
@@ -185,6 +188,7 @@ function reducer(state: ConversationState, action: Action): ConversationState {
         ...applyBlocks(state, action.data.blocks ?? [], view),
         view,
         busy: false,
+        turnNo: state.turnNo + 1,
         last: {
           sent: action.interaction.type,
           blocks: action.data.blocks ?? [],
@@ -241,6 +245,7 @@ export function useConversation() {
 
 export function labelFor(question: PublicQuestion | undefined, value: AnswerValue): string {
   const one = (v: AnswerValue) =>
-    question?.options.find((o) => o.value === v)?.label ?? String(v);
+    question?.options.find((o) => o.value === v)?.label ??
+    (typeof v === "boolean" ? (v ? "Yes" : "No") : String(v));
   return Array.isArray(value) ? value.map(one).join(", ") : one(value);
 }

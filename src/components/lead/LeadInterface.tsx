@@ -24,6 +24,8 @@ type Props = LeadHandlers & {
   state: ConversationState;
   reply: string;
   setReply: (v: string) => void;
+  /** Pre-selected by the guide's "Pick for me"; sent only on Continue. */
+  suggested?: AnswerValue | null;
 };
 
 /** The lead-facing Kenzo screen, as an agency's customer sees it. */
@@ -82,7 +84,7 @@ export function LeadInterface(props: Props) {
               <OutcomeCard text={state.outcome.text} kind={state.outcome.kind} />
             ) : question ? (
               <QuestionStep
-                key={question.metric}
+                key={`${question.metric}:${JSON.stringify(props.suggested ?? null)}`}
                 {...props}
                 question={question}
                 index={index}
@@ -162,12 +164,20 @@ function QuestionStep(
   },
 ) {
   const { state, question, reply, setReply } = props;
-  const [picked, setPicked] = useState<Scalar[]>([]);
+  const suggested = props.suggested ?? null;
+  const multi = question.answer_type === "multi_choice";
+  const [picked, setPicked] = useState<Scalar[]>(() =>
+    multi && Array.isArray(suggested) ? suggested : [],
+  );
   const [askText, setAskText] = useState("");
   const [numberText, setNumberText] = useState("");
   const busy = state.busy;
   const view = state.view;
-  const pursuitOpen = view?.active_pursuit?.metric === question.metric;
+  const pursuitStage =
+    view?.active_pursuit?.metric === question.metric ? view.active_pursuit.stage : null;
+  // Options are hidden during a pursuit; the reply box only while it's offered.
+  const pursuitOpen = pursuitStage !== null;
+  const replyHidden = pursuitStage === "offered";
   // A value Kenzo read or pre-filled is shown with a one-tap confirm.
   const confirming = state.prefill !== null;
 
@@ -202,7 +212,7 @@ function QuestionStep(
 
   const pick = (value: Scalar) => {
     if (busy) return;
-    if (question.answer_type === "multi_choice") {
+    if (multi) {
       setPicked((p) => (p.includes(value) ? p.filter((v) => v !== value) : [...p, value]));
       return;
     }
@@ -276,6 +286,7 @@ function QuestionStep(
           {options.map((o) => {
             const selected =
               picked.includes(o.value) ||
+              (!multi && suggested === o.value) ||
               (state.prefill !== null && (Array.isArray(state.prefill) ? state.prefill.includes(o.value) : state.prefill === o.value));
             return (
               <button
@@ -295,9 +306,21 @@ function QuestionStep(
               </button>
             );
           })}
-          {question.answer_type === "multi_choice" && (
+          {!multi && suggested !== null && !Array.isArray(suggested) && (
             <button
               type="button"
+              data-tour="continue"
+              disabled={busy}
+              onClick={() => props.onAnswer(question.metric, suggested, labelFor(question, suggested))}
+              className="min-h-12 rounded-button bg-accent px-5 font-semibold text-accent-fg transition hover:bg-accent-hover disabled:opacity-40 md:col-span-2"
+            >
+              Continue with {labelFor(question, suggested)}
+            </button>
+          )}
+          {multi && (
+            <button
+              type="button"
+              data-tour={suggested !== null ? "continue" : undefined}
               disabled={busy || picked.length === 0}
               onClick={() => props.onAnswer(question.metric, picked, labelFor(question, picked))}
               className="min-h-12 rounded-button bg-accent px-5 font-semibold text-accent-fg transition hover:bg-accent-hover disabled:opacity-40 md:col-span-2"
@@ -328,7 +351,7 @@ function QuestionStep(
       )}
 
       {/* "Or just tell me" */}
-      {(question.allows_text || question.answer_type === "text") && !pursuitOpen && (
+      {(question.allows_text || question.answer_type === "text") && !replyHidden && (
         <form data-tour="reply" onSubmit={submitReply} className="mt-1 flex items-center gap-2.5">
           <label className="min-w-0 flex-1">
             <span className="sr-only">Reply to Kenzo</span>
@@ -337,7 +360,7 @@ function QuestionStep(
               onChange={(e) => setReply(e.target.value)}
               maxLength={MAX_MESSAGE_CHARS}
               disabled={busy}
-              placeholder={options.length ? "Or just tell me…" : "Type your answer…"}
+              placeholder={pursuitStage === "pursuing" ? "Reply to Kenzo…" : options.length ? "Or just tell me…" : "Type your answer…"}
               className="h-13 w-full rounded-control border-control bg-surface px-5 text-base placeholder:text-fg-subtle disabled:opacity-60"
             />
           </label>
