@@ -16,9 +16,9 @@ export type MascotPose =
   | "notepad";
 
 const POSES: Record<MascotPose, { src: string; w: number; h: number; alt: string }> = {
-  // Mirror of point-right: Gemini's left-pointing art looked the other way.
-  "point-left": { src: "/mascot/kenzo-point-left.webp", w: 555, h: 800, alt: "Kenzo pointing" },
-  "point-right": { src: "/mascot/kenzo-point-right.webp", w: 555, h: 800, alt: "Kenzo pointing" },
+  // Mirror of point-right, so both poses look where they point.
+  "point-left": { src: "/mascot/kenzo-point-left.webp", w: 570, h: 800, alt: "Kenzo pointing" },
+  "point-right": { src: "/mascot/kenzo-point-right.webp", w: 570, h: 800, alt: "Kenzo pointing" },
   present: { src: "/mascot/kenzo-present.webp", w: 655, h: 800, alt: "Kenzo with arms open" },
   thinking: { src: "/mascot/kenzo-thinking.webp", w: 502, h: 800, alt: "Kenzo thinking" },
   celebrate: { src: "/mascot/kenzo-celebrate.webp", w: 623, h: 800, alt: "Kenzo celebrating" },
