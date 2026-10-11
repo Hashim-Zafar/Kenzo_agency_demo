@@ -1,20 +1,30 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LeadInterface } from "@/components/lead/LeadInterface";
+import { BookingScreen } from "@/components/sim/BookingScreen";
+import { ConfirmationScene } from "@/components/sim/ConfirmationScene";
+import { RemindersScene } from "@/components/sim/RemindersScene";
 import { Guide } from "@/components/tour/Guide";
 import { useConversation } from "@/lib/kenzo/useConversation";
 import type { AnswerValue, ConversationAction, Interaction } from "@/lib/kenzo/types";
-import { deriveHint } from "@/lib/tour/hints";
+import { bookingDays, freeTimes, type Booking, type Day } from "@/lib/sim/booking";
+import { deriveHint, simHint, type SimStage } from "@/lib/tour/hints";
 import { stepScript } from "@/lib/tour/demo-agency";
 
 /** Tips that show even with the guide hidden. */
 const ALWAYS = new Set(["intro", "handoff", "ended", "limit", "error"]);
 
-/** The agent walkthrough: the live Kenzo, with Kenzo the guide on top. */
+type Stage = "agent" | SimStage;
+
+/** The customer's side: the live Kenzo, then booking, the confirmation email
+ *  and the reminders (simulated), with Kenzo the guide on top. */
 export function Walkthrough() {
+  const router = useRouter();
   const { state, start, send, explain, closeWhy } = useConversation();
+  const [stage, setStage] = useState<Stage>("agent");
   const [reply, setReply] = useState("");
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
   const [guideOn, setGuideOn] = useState(true);
@@ -22,9 +32,21 @@ export function Walkthrough() {
   const [suggestion, setSuggestion] = useState<{ metric: string; value: AnswerValue } | null>(null);
   const typingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Simulated booking
+  const [day, setDay] = useState<Day | null>(null);
+  const [time, setTime] = useState<string | null>(null);
+  const [booking, setBooking] = useState<Booking | null>(null);
+  const [booking_busy, setBookingBusy] = useState(false);
+  const [remindersDone, setRemindersDone] = useState(false);
+  const [playKey, setPlayKey] = useState(0);
+
+  const agencyName = state.agencyName || "Fernley";
   const suggested =
     suggestion && suggestion.metric === state.stepMetric ? suggestion.value : null;
-  const hint = deriveHint(state, { dismissed, suggested, reply });
+  const hint =
+    stage === "agent"
+      ? deriveHint(state, { dismissed, suggested, reply })
+      : simHint(stage, { hasDay: day !== null, hasTime: time !== null, remindersDone });
 
   const stopTyping = () => {
     if (typingTimer.current) clearInterval(typingTimer.current);
@@ -43,11 +65,25 @@ export function Walkthrough() {
 
   const restart = useCallback(() => {
     stopTyping();
+    setStage("agent");
     setDismissed(new Set());
     setSuggestion(null);
     setReply("");
+    setDay(null);
+    setTime(null);
+    setBooking(null);
+    setRemindersDone(false);
     void start();
   }, [start]);
+
+  const confirmBooking = (b: Booking) => {
+    setBookingBusy(true);
+    setTimeout(() => {
+      setBooking(b);
+      setBookingBusy(false);
+      setStage("confirmation");
+    }, 700);
+  };
 
   const onPrimary = () => {
     if (!hint?.primary) return;
@@ -62,7 +98,29 @@ export function Walkthrough() {
       case "dismiss":
         setDismissed((d) => new Set(d).add(hint.id));
         break;
+      case "next":
+        if (stage === "agent") setStage("booking");
+        else if (stage === "confirmation") {
+          setRemindersDone(false);
+          setPlayKey((k) => k + 1);
+          setStage("reminders");
+        }
+        break;
+      case "toAgency":
+        router.push("/tour/agency");
+        break;
       case "pickForMe": {
+        if (stage === "booking") {
+          // Select only; the visitor still presses Book.
+          if (!day) {
+            const first = bookingDays().find((d) => !d.weekend && freeTimes(d.key).length > 0);
+            if (first) setDay(first);
+          } else if (!time) {
+            const t = freeTimes(day.key)[0];
+            if (t) setTime(t);
+          }
+          return;
+        }
         if (!question) return;
         const scripted = stepScript(question.metric)?.pickValue;
         const first =
@@ -108,7 +166,7 @@ export function Walkthrough() {
           </Link>
         </nav>
         <span className="flex-1" />
-        {state.phase !== "idle" && (
+        {(state.phase !== "idle" || stage !== "agent") && (
           <>
             <button type="button" onClick={() => setGuideOn((v) => !v)} className="min-h-10 rounded-control px-3 text-sm font-semibold text-fg-muted hover:bg-surface-muted">
               {guideOn ? "Hide guide" : "Show guide"}
@@ -121,25 +179,45 @@ export function Walkthrough() {
       </header>
 
       <div className="flex flex-1 flex-col md:items-center md:justify-center md:p-8">
-        <LeadInterface
-          state={state}
-          reply={reply}
-          setReply={(v) => {
-            stopTyping();
-            setReply(v);
-          }}
-          suggested={suggested}
-          allowedActions={showGuide ? (hint?.allowedActions ?? null) : null}
-          onAnswer={(metric, value, label) => act({ type: "structured_answer", metric, value }, { label })}
-          onText={(metric, message) => act({ type: "metric_text", metric, message }, { echo: message })}
-          onAsk={(message) => act({ type: "ask_kenzo", message }, { echo: message })}
-          onAction={(action: ConversationAction, metric) => act({ type: "action", action, metric })}
-          onExplain={explain}
-          onCloseWhy={closeWhy}
-        />
+        {stage === "agent" && (
+          <LeadInterface
+            state={state}
+            reply={reply}
+            setReply={(v) => {
+              stopTyping();
+              setReply(v);
+            }}
+            suggested={suggested}
+            allowedActions={showGuide ? (hint?.allowedActions ?? null) : null}
+            onAnswer={(metric, value, label) => act({ type: "structured_answer", metric, value }, { label })}
+            onText={(metric, message) => act({ type: "metric_text", metric, message }, { echo: message })}
+            onAsk={(message) => act({ type: "ask_kenzo", message }, { echo: message })}
+            onAction={(action: ConversationAction, metric) => act({ type: "action", action, metric })}
+            onExplain={explain}
+            onCloseWhy={closeWhy}
+          />
+        )}
+        {stage === "booking" && (
+          <BookingScreen
+            agencyName={agencyName}
+            day={day}
+            time={time}
+            busy={booking_busy}
+            onDay={(d) => {
+              setDay(d);
+              setTime(null);
+            }}
+            onTime={setTime}
+            onConfirm={confirmBooking}
+          />
+        )}
+        {stage === "confirmation" && booking && <ConfirmationScene agencyName={agencyName} booking={booking} />}
+        {stage === "reminders" && booking && (
+          <RemindersScene agencyName={agencyName} booking={booking} playKey={playKey} onDone={() => setRemindersDone(true)} />
+        )}
       </div>
 
-      {showGuide && <Guide key={hint.id} hint={hint} onPrimary={onPrimary} busy={state.busy} />}
+      {showGuide && <Guide key={hint.id} hint={hint} onPrimary={onPrimary} busy={state.busy || booking_busy} />}
     </div>
   );
 }

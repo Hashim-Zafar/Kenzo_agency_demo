@@ -5,7 +5,7 @@ import type { MascotPose } from "@/components/mascot/Mascot";
 import { demoAgency, stepScript } from "./demo-agency";
 
 /** What the guide does when its button is pressed. */
-export type HintAction = "start" | "dismiss" | "pickForMe" | "typeForMe" | "restart";
+export type HintAction = "start" | "dismiss" | "pickForMe" | "typeForMe" | "restart" | "next" | "toAgency";
 
 export type Hint = {
   /** Unique per moment; the guide re-aims when it changes. */
@@ -83,8 +83,8 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
       target: "outcome",
       pose: "celebrate",
       title: s.view?.lead_status === "warm" ? "A warm lead, straight to booking" : "Qualified, straight to booking",
-      body: "A good-fit lead goes on to pick a time. No back-and-forth emails, and you never chase a form.",
-      primary: { label: "See it again", action: "restart" },
+      body: "A good-fit lead goes straight on to pick a time. No back-and-forth emails, and you never chase a form.",
+      primary: { label: "Next: booking", action: "next" },
     };
   }
   if (s.outcome?.kind === "ended") {
@@ -95,9 +95,9 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
       pose: "thinking",
       title: notFit ? "Not a fit, handled kindly" : "Conversation closed",
       body: notFit
-        ? "They kept an answer that's outside what you want, so Kenzo thanks them politely and nothing lands in your calendar. Your team only talks to leads worth talking to."
-        : "Kenzo closes conversations that stop making sense, so your team's time is protected.",
-      primary: { label: "Try another path", action: "restart" },
+        ? "They kept an answer that's outside what you want, so Kenzo thanks them politely and nothing lands in your calendar. A good-fit lead goes straight to booking: here's what they see."
+        : "Kenzo closes conversations that stop making sense, so your team's time is protected. Here's what a good-fit lead sees next.",
+      primary: { label: "Next: booking", action: "next" },
     };
   }
 
@@ -313,5 +313,67 @@ function stepHint(
     body: "Every answer is checked against your criteria as it comes in, so a poor fit never reaches your calendar.",
     waiting: "Waiting for your pick",
     primary: PICK_FOR_ME,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* The simulated steps after the conversation: booking, email, reminders */
+
+export type SimStage = "booking" | "confirmation" | "reminders";
+
+export function simHint(
+  stage: SimStage,
+  sim: { hasDay: boolean; hasTime: boolean; remindersDone: boolean },
+): Hint {
+  if (stage === "booking") {
+    if (!sim.hasDay) {
+      return {
+        id: "sim:day",
+        target: "calendar",
+        pose: "phone",
+        title: "Only times your team is free",
+        body: "Leads see real free slots, so there are no double bookings and no email ping-pong to find a time. Pick a day.",
+        waiting: "Pick a day",
+        primary: PICK_FOR_ME,
+      };
+    }
+    if (!sim.hasTime) {
+      return {
+        id: "sim:time",
+        target: "slots",
+        pose: "point",
+        title: "Clear times, no mix-ups",
+        body: "Every slot shows UK time and the call length, so nobody turns up at the wrong hour. Taken times are crossed out.",
+        waiting: "Pick a time",
+        primary: PICK_FOR_ME,
+      };
+    }
+    return {
+      id: "sim:book",
+      target: "book",
+      pose: "point",
+      title: "Booked in one tap",
+      body: "No form to fill in again: Kenzo already has their name and email from the conversation.",
+      waiting: "Press Book",
+    };
+  }
+  if (stage === "confirmation") {
+    return {
+      id: "sim:email",
+      target: "email",
+      pose: "present",
+      title: "Confirmed in seconds",
+      body: "The invite with the Zoom link and an add-to-calendar button lands straight away, while they're still keen. In this demo nothing is actually sent.",
+      primary: { label: "Next: reminders", action: "next" },
+    };
+  }
+  return {
+    id: sim.remindersDone ? "sim:reminders:done" : "sim:reminders",
+    target: "reminders",
+    pose: "phone",
+    title: "Then Kenzo makes sure they turn up",
+    body: "Reminders go out 24 hours, 3 hours and 30 minutes before, each with the join link. Fewer no-shows, and your team never chases anyone.",
+    waiting: sim.remindersDone ? undefined : "Watch them arrive (sped up)",
+    primary: sim.remindersDone ? { label: "Next: your view", action: "toAgency" } : undefined,
   };
 }

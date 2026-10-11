@@ -8,7 +8,7 @@ type Rect = { top: number; left: number; width: number; height: number };
 type Layout = {
   spot: Rect | null;
   bubble: { x: number; y: number };
-  tail: { side: "left" | "right" | "top" | "none"; offset: number };
+  tail: { side: "left" | "right" | "top" | "bottom" | "none"; offset: number };
   mascot: { x: number; y: number; pose: MascotPose } | null;
   dock: { top: number | null; bottom: number | null } | null;
 };
@@ -222,7 +222,9 @@ export function Guide({
                     ? { left: -7, top: tail.offset - 7, borderTopColor: "transparent", borderRightColor: "transparent" }
                     : tail.side === "right"
                       ? { right: -7, top: tail.offset - 7, borderBottomColor: "transparent", borderLeftColor: "transparent" }
-                      : { top: -7, left: tail.offset - 7, borderBottomColor: "transparent", borderRightColor: "transparent" }
+                      : tail.side === "bottom"
+                        ? { bottom: -7, left: tail.offset - 7, borderTopColor: "transparent", borderLeftColor: "transparent" }
+                        : { top: -7, left: tail.offset - 7, borderBottomColor: "transparent", borderRightColor: "transparent" }
                 }
               />
             )}
@@ -279,7 +281,7 @@ function place(
   const centreY = r.top + r.height / 2;
   const clampY = (y: number) => Math.min(Math.max(y, edge), vp.h - bh - edge);
 
-  let side: "right" | "left" | "below";
+  let side: "right" | "left" | "below" | "above";
   let x: number;
   let y: number;
   const rightX = r.left + r.width + pad + gap;
@@ -293,15 +295,25 @@ function place(
     x = leftX;
     y = clampY(centreY - bh / 2);
   } else {
-    side = "below";
+    // No room beside it: below if it fits, otherwise above. Never on top of it.
     x = Math.min(Math.max(r.left + r.width / 2 - bw / 2, edge), vp.w - bw - edge);
-    y = Math.min(r.top + r.height + pad + gap, vp.h - bh - edge);
+    const belowY = r.top + r.height + pad + gap;
+    if (belowY + bh <= vp.h - edge) {
+      side = "below";
+      y = belowY;
+    } else {
+      side = "above";
+      y = Math.max(r.top - pad - gap - bh, edge);
+    }
   }
 
+  const tailX = Math.min(Math.max(r.left + r.width / 2 - x, 20), bw - 20);
   const tail: Layout["tail"] =
     side === "below"
-      ? { side: "top", offset: Math.min(Math.max(r.left + r.width / 2 - x, 20), bw - 20) }
-      : { side: side === "right" ? "left" : "right", offset: Math.min(Math.max(centreY - y, 20), bh - 20) };
+      ? { side: "top", offset: tailX }
+      : side === "above"
+        ? { side: "bottom", offset: tailX }
+        : { side: side === "right" ? "left" : "right", offset: Math.min(Math.max(centreY - y, 20), bh - 20) };
 
   // Kenzo goes wherever he covers the least: never the target or the bubble,
   // and as little of the agent screen as possible.
@@ -317,8 +329,8 @@ function place(
   const candidates: { x: number; y: number; pose: MascotPose }[] = [
     { x: target.left - gap - mw, y: besideY, pose: pointAt(true) },
     { x: target.right + gap, y: besideY, pose: pointAt(false) },
-    { x: stackX, y: y - mh - 8, pose: pointAt(side === "left" || (side === "below" && stackX < r.left)) },
-    { x: stackX, y: y + bh + 8, pose: pointAt(side === "left" || (side === "below" && stackX < r.left)) },
+    { x: stackX, y: y - mh - 8, pose: pointAt(side === "left" || ((side === "below" || side === "above") && stackX < r.left)) },
+    { x: stackX, y: y + bh + 8, pose: pointAt(side === "left" || ((side === "below" || side === "above") && stackX < r.left)) },
   ];
   let mascot: Layout["mascot"] = null;
   let best = Infinity;
