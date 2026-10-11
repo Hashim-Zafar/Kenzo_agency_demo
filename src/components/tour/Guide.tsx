@@ -244,6 +244,14 @@ export function Guide({
 
 /* ------------------------------------------------------------------ */
 
+type Box = { left: number; top: number; right: number; bottom: number };
+
+function overlap(a: Box, b: Box): number {
+  const w = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+  const h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+  return w > 0 && h > 0 ? w * h : 0;
+}
+
 function place(
   r: Rect,
   size: { w: number; h: number },
@@ -295,12 +303,35 @@ function place(
       ? { side: "top", offset: Math.min(Math.max(r.left + r.width / 2 - x, 20), bw - 20) }
       : { side: side === "right" ? "left" : "right", offset: Math.min(Math.max(centreY - y, 20), bh - 20) };
 
-  const mascotPose: MascotPose =
-    pose === "point" ? (side === "right" ? "point-left" : side === "left" ? "point-right" : "present") : pose;
-  const mx = side === "left" ? x : x + bw - mw;
+  // Kenzo goes wherever he covers the least: never the target or the bubble,
+  // and as little of the agent screen as possible.
+  const bubbleRect = { left: x, top: y, right: x + bw, bottom: y + bh };
+  const target = { left: r.left - pad, top: r.top - pad, right: r.left + r.width + pad, bottom: r.top + r.height + pad };
+  const zoneEl = document.querySelector<HTMLElement>('[data-tour-zone="main"]');
+  const zr = zoneEl?.getBoundingClientRect();
+  const zone = zr ? { left: zr.left, top: zr.top, right: zr.right, bottom: zr.bottom } : null;
+  const pointAt = (fromLeft: boolean): MascotPose =>
+    pose === "point" ? (fromLeft ? "point-right" : "point-left") : pose;
+  const besideY = Math.min(Math.max(centreY - mh * 0.5, edge), vp.h - mh - edge);
+  const stackX = side === "left" ? x : x + bw - mw;
+  const candidates: { x: number; y: number; pose: MascotPose }[] = [
+    { x: target.left - gap - mw, y: besideY, pose: pointAt(true) },
+    { x: target.right + gap, y: besideY, pose: pointAt(false) },
+    { x: stackX, y: y - mh - 8, pose: pointAt(side === "left" || (side === "below" && stackX < r.left)) },
+    { x: stackX, y: y + bh + 8, pose: pointAt(side === "left" || (side === "below" && stackX < r.left)) },
+  ];
   let mascot: Layout["mascot"] = null;
-  if (y - mh - 8 >= edge) mascot = { x: mx, y: y - mh - 8, pose: mascotPose };
-  else if (y + bh + 8 + mh <= vp.h - edge) mascot = { x: mx, y: y + bh + 8, pose: mascotPose };
+  let best = Infinity;
+  for (const c of candidates) {
+    const box = { left: c.x, top: c.y, right: c.x + mw, bottom: c.y + mh };
+    if (box.left < edge || box.top < edge || box.right > vp.w - edge || box.bottom > vp.h - edge) continue;
+    const score =
+      overlap(box, target) * 100 + overlap(box, bubbleRect) * 100 + (zone ? overlap(box, zone) : 0);
+    if (score < best) {
+      best = score;
+      mascot = c;
+    }
+  }
 
   return { spot: r, bubble: { x, y }, tail, mascot, dock: null };
 }

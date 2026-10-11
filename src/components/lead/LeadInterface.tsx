@@ -26,6 +26,8 @@ type Props = LeadHandlers & {
   setReply: (v: string) => void;
   /** Pre-selected by the guide's "Pick for me"; sent only on Continue. */
   suggested?: AnswerValue | null;
+  /** While the tour guides a choice, only these buttons are usable. */
+  allowedActions?: ConversationAction[] | null;
 };
 
 /** The lead-facing Kenzo screen, as an agency's customer sees it. */
@@ -55,6 +57,7 @@ export function LeadInterface(props: Props) {
         <span className="flex-1 truncate font-semibold">{state.agencyName || "Agency"}</span>
         <button
           type="button"
+          data-tour="ask"
           onClick={() => setAsking(true)}
           disabled={!question}
           className="min-h-10 rounded-control border-control px-4 text-sm font-semibold transition hover:bg-surface-muted disabled:opacity-40 md:hidden"
@@ -78,7 +81,7 @@ export function LeadInterface(props: Props) {
       <div className="flex min-h-0 flex-1">
         <StepList state={state} index={index} onAsk={() => setAsking(true)} />
 
-        <main className="flex flex-1 justify-center overflow-y-auto px-4 py-6 md:items-center md:px-10 md:py-8">
+        <main data-tour-zone="main" className="flex flex-1 justify-center overflow-y-auto px-4 py-6 md:items-center md:px-10 md:py-8">
           <div className="flex w-full max-w-(--question-column) flex-col gap-3">
             {state.outcome ? (
               <OutcomeCard text={state.outcome.text} kind={state.outcome.kind} />
@@ -142,6 +145,7 @@ function StepList({ state, index, onAsk }: { state: ConversationState; index: nu
       </ol>
       <button
         type="button"
+        data-tour="ask"
         onClick={onAsk}
         disabled={index < 0 || Boolean(state.outcome)}
         className="mt-auto min-h-11 w-full rounded-button border-control bg-surface text-sm font-semibold transition hover:bg-surface-muted disabled:opacity-40"
@@ -257,6 +261,7 @@ function QuestionStep(
               item={item}
               isLast={item === lastKenzo}
               busy={busy}
+              allowed={props.allowedActions ?? null}
               onChoice={(action) => item.from === "kenzo" && item.metric && props.onAction(action, item.metric)}
             />
           ))}
@@ -407,11 +412,13 @@ function ThreadEntry({
   item,
   isLast,
   busy,
+  allowed,
   onChoice,
 }: {
   item: ThreadItem;
   isLast: boolean;
   busy: boolean;
+  allowed: ConversationAction[] | null;
   onChoice: (action: ConversationAction) => void;
 }) {
   if (item.from === "lead") {
@@ -440,7 +447,8 @@ function ThreadEntry({
             <button
               key={c.action}
               type="button"
-              disabled={busy}
+              disabled={busy || (allowed !== null && !allowed.includes(c.action))}
+              title={allowed !== null && !allowed.includes(c.action) ? "Not part of this tour" : undefined}
               onClick={() => onChoice(c.action)}
               className={`min-h-12 rounded-button px-5 font-semibold transition disabled:opacity-50 ${
                 i === 0 ? "bg-accent text-accent-fg hover:bg-accent-hover" : "border-control bg-surface hover:bg-surface-muted"

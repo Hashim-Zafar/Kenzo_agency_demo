@@ -7,6 +7,7 @@ import { Guide } from "@/components/tour/Guide";
 import { useConversation } from "@/lib/kenzo/useConversation";
 import type { AnswerValue, ConversationAction, Interaction } from "@/lib/kenzo/types";
 import { deriveHint } from "@/lib/tour/hints";
+import { stepScript } from "@/lib/tour/demo-agency";
 
 /** Tips that show even with the guide hidden. */
 const ALWAYS = new Set(["intro", "handoff", "ended", "limit", "error"]);
@@ -63,10 +64,13 @@ export function Walkthrough() {
         break;
       case "pickForMe": {
         if (!question) return;
+        const scripted = stepScript(question.metric)?.pickValue;
         const first =
-          question.options[0] ?? (question.answer_type === "boolean" ? { label: "Yes", value: true } : null);
-        if (!first) return;
-        const value: AnswerValue = question.answer_type === "multi_choice" ? [first.value] : first.value;
+          question.options[0]?.value ?? (question.answer_type === "boolean" ? true : null);
+        const pick = scripted ?? first;
+        if (pick === null || pick === undefined) return;
+        const multi = question.answer_type === "multi_choice";
+        const value: AnswerValue = multi ? (Array.isArray(pick) ? pick : [pick]) : Array.isArray(pick) ? pick[0] : pick;
         setSuggestion({ metric: question.metric, value });
         break;
       }
@@ -125,6 +129,7 @@ export function Walkthrough() {
             setReply(v);
           }}
           suggested={suggested}
+          allowedActions={showGuide ? (hint?.allowedActions ?? null) : null}
           onAnswer={(metric, value, label) => act({ type: "structured_answer", metric, value }, { label })}
           onText={(metric, message) => act({ type: "metric_text", metric, message }, { echo: message })}
           onAsk={(message) => act({ type: "ask_kenzo", message }, { echo: message })}

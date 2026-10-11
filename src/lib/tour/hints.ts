@@ -1,8 +1,8 @@
 import type { ConversationState } from "@/lib/kenzo/useConversation";
-import type { AnswerValue, PublicQuestion } from "@/lib/kenzo/types";
 import { labelFor } from "@/lib/kenzo/useConversation";
+import type { AnswerValue, ConversationAction, PublicQuestion } from "@/lib/kenzo/types";
 import type { MascotPose } from "@/components/mascot/Mascot";
-import { demoAgency } from "./demo-agency";
+import { demoAgency, stepScript } from "./demo-agency";
 
 /** What the guide does when its button is pressed. */
 export type HintAction = "start" | "dismiss" | "pickForMe" | "typeForMe" | "restart";
@@ -10,15 +10,18 @@ export type HintAction = "start" | "dismiss" | "pickForMe" | "typeForMe" | "rest
 export type Hint = {
   /** Unique per moment; the guide re-aims when it changes. */
   id: string;
-  /** data-tour value of the element to spotlight; null = centred card. */
+  /** data-tour value(s) to spotlight ("a|b" = both); null = centred card. */
   target: string | null;
   /** "point" = Kenzo points toward the target from whichever side he's on. */
   pose: MascotPose | "point";
   title: string;
   body?: string;
+  /** Typed into the reply box by "Type it for me" (never sent for them). */
   suggestion?: string;
   waiting?: string;
   primary?: { label: string; action: HintAction };
+  /** Only these choice buttons are usable while this tip is up. */
+  allowedActions?: ConversationAction[];
 };
 
 export type HintContext = {
@@ -30,13 +33,16 @@ export type HintContext = {
   reply: string;
 };
 
+const TYPE_FOR_ME = { label: "Type it for me", action: "typeForMe" } as const;
+const PICK_FOR_ME = { label: "Pick for me", action: "pickForMe" } as const;
+
 /**
- * One guide per step. Order of precedence:
+ * One guide per moment. Order of precedence:
  *   1. the conversation's own moments (intro, ending, limits, errors)
- *   2. things waiting on the visitor (correction pop-up, below-minimum offer,
+ *   2. things waiting on the visitor (correction, the below-minimum offer,
  *      talking it through, confirming a value)
- *   3. a reaction to the last turn (went off script, warning) until "Got it"
- *   4. the step's own guide, which stays until the step is answered
+ *   3. a reaction to the last turn (off script, warning) until "Got it"
+ *   4. the step's own guide from the demo script
  */
 export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null {
   /* ---- 1. the conversation's own moments ---- */
@@ -46,7 +52,7 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
       target: null,
       pose: "present",
       title: "You're the customer now",
-      body: "This is the live Kenzo, not a recording. I'll guide you through every step and show you what happens behind it.",
+      body: "This is the live Kenzo, not a recording. I'll walk you through every step and show you how each one helps your agency.",
       primary: { label: "Start", action: "start" },
     };
   }
@@ -76,7 +82,7 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
       id: "handoff",
       target: "outcome",
       pose: "celebrate",
-      title: "Qualified, straight to booking",
+      title: s.view?.lead_status === "warm" ? "A warm lead, straight to booking" : "Qualified, straight to booking",
       body: "A good-fit lead goes on to pick a time. No back-and-forth emails, and you never chase a form.",
       primary: { label: "See it again", action: "restart" },
     };
@@ -89,7 +95,7 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
       pose: "thinking",
       title: notFit ? "Not a fit, handled kindly" : "Conversation closed",
       body: notFit
-        ? "Leads who don't match your criteria are told politely, and nothing lands in your calendar."
+        ? "They kept an answer that's outside what you want, so Kenzo thanks them politely and nothing lands in your calendar. Your team only talks to leads worth talking to."
         : "Kenzo closes conversations that stop making sense, so your team's time is protected.",
       primary: { label: "Try another path", action: "restart" },
     };
@@ -100,6 +106,7 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
   const index = s.questions.findIndex((q) => q.metric === metric);
   const question = index >= 0 ? s.questions[index] : undefined;
   if (!question || !metric) return null;
+  const script = stepScript(metric);
 
   /* ---- 2. waiting on the visitor ---- */
   if (view?.pending_correction) {
@@ -114,25 +121,72 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
   }
 
   const pursuit = view?.active_pursuit?.metric === metric ? view.active_pursuit : null;
+  const lastCodes = new Set(s.last.blocks.map((b) => b.code));
+  const lastKinds = new Set(s.last.blocks.map((b) => b.kind));
+
   if (pursuit?.stage === "offered") {
+    const choice = script?.offerChoice;
+    if (choice === "decline_pursuit") {
+      return {
+        id: `offer:${metric}`,
+        target: "pursuit",
+        pose: "present",
+        title: "Leads are never pushed",
+        body: "Tap “Keep going”. Kenzo keeps their answer and moves on, with no second attempt. Every lead gets a polite, respectful experience, even the ones who aren't a fit.",
+        waiting: "Tap “Keep going”",
+        allowedActions: ["decline_pursuit"],
+      };
+    }
     return {
-      id: `pursuit-offer:${metric}`,
+      id: `offer:${metric}`,
       target: "pursuit",
       pose: "present",
-      title: "Under the minimum, but not turned away",
-      body: `That's under ${demoAgency.minimumLabel}. Instead of a flat no, Kenzo offers to talk it through. The minimum comes from your settings.`,
-      waiting: "Pick either one to see where it goes",
+      title: "Below your floor, but not turned away",
+      body: "Instead of a flat no, Kenzo offers to talk it through. Leads you'd have lost to a form get a second chance. Tap “Talk it through”.",
+      waiting: "Tap “Talk it through”",
+      allowedActions: choice ? [choice] : undefined,
     };
   }
+
   if (pursuit?.stage === "pursuing") {
-    return {
-      id: `pursuing:${metric}`,
-      target: question.allows_text || question.answer_type === "text" ? "pursuit|reply" : "pursuit",
-      pose: "point",
-      title: "Talk it through with Kenzo",
-      body: "Ask what you'd get for your budget, or push back. Kenzo makes the agency's case using only offers they've set up. You can also tap one of its suggestions.",
-      waiting: "Waiting for your reply",
-    };
+    const [firstReply, secondReply] = demoAgency.pursuitReplies;
+    const typed = ctx.reply.trim().length > 0;
+    if (lastKinds.has("pursuit_choices")) {
+      return {
+        id: `pitch:${metric}:${s.turnNo}`,
+        target: "pursuit",
+        pose: "present",
+        title: "Now Kenzo makes your case",
+        body: "It argues from offers and facts you've set up, never invented ones. The lead decides: take your number, or keep theirs.",
+        waiting: "Your call",
+      };
+    }
+    if (lastCodes.has("pursuit_opener")) {
+      return typed
+        ? sendHint(`opener:${metric}:typed`)
+        : {
+            id: `opener:${metric}`,
+            target: "reply",
+            pose: "point",
+            title: "Kenzo asks before it pitches",
+            body: "That opening question is yours, written in your settings. No sales pitch until the lead has said what's holding them back.",
+            suggestion: firstReply,
+            waiting: "Reply in your own words",
+            primary: TYPE_FOR_ME,
+          };
+    }
+    return typed
+      ? sendHint(`listening:${metric}:${s.turnNo}:typed`)
+      : {
+          id: `listening:${metric}:${s.turnNo}`,
+          target: "reply",
+          pose: "thinking",
+          title: "Kenzo listens first",
+          body: "It answers their point from your own facts, without pushing. When the moment's right, it makes your case.",
+          suggestion: secondReply,
+          waiting: "Reply again",
+          primary: TYPE_FOR_ME,
+        };
   }
 
   if (s.prefill !== null) {
@@ -141,13 +195,12 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
       target: "confirm",
       pose: "point",
       title: "Kenzo checks before saving",
-      body: "When a typed answer could be read more than one way, it asks once instead of guessing.",
+      body: "When a typed answer could be read more than one way, it asks once instead of guessing. Your data stays clean.",
       waiting: "Confirm it, or pick another answer",
     };
   }
 
   /* ---- 3. reaction to the last turn ---- */
-  const lastKinds = new Set(s.last.blocks.map((b) => b.kind));
   const offScript =
     (s.last.sent === "metric_text" || s.last.sent === "ask_kenzo") &&
     lastKinds.has("generated") &&
@@ -158,8 +211,8 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
       id: offScriptId,
       target: "thread-last",
       pose: "thinking",
-      title: "A question instead of an answer, that's fine",
-      body: "Kenzo answered from the agency's own documents and kept their place. The question is still waiting.",
+      title: s.last.sent === "ask_kenzo" ? "Answered from your documents" : "A question instead of an answer, that's fine",
+      body: "Kenzo answered from your own documents and kept their place. Nothing made up, and the step is still waiting.",
       primary: { label: "Got it", action: "dismiss" },
     };
   }
@@ -177,13 +230,23 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
   }
 
   /* ---- 4. the step's own guide ---- */
-  return stepHint(s, question, index, ctx);
+  return stepHint(question, script, ctx);
+}
+
+function sendHint(id: string): Hint {
+  return {
+    id,
+    target: "reply",
+    pose: "point",
+    title: "Now press send",
+    body: "Kenzo reads it like a person would. No format to get right.",
+    waiting: "Waiting for you to send",
+  };
 }
 
 function stepHint(
-  s: ConversationState,
   question: PublicQuestion,
-  index: number,
+  script: ReturnType<typeof stepScript>,
   ctx: HintContext,
 ): Hint {
   const m = question.metric;
@@ -204,28 +267,34 @@ function stepHint(
     };
   }
 
-  // The "type a budget under the minimum" showcase.
-  const typingMetric =
-    demoAgency.typingMetric ??
-    s.questions.find((q) => q.answer_type === "number" && q.allows_text)?.metric ??
-    null;
-  if (m === typingMetric && question.allows_text) {
-    const typed = ctx.reply.trim().length > 0;
+  const canType = question.allows_text || question.answer_type === "text";
+
+  if (script) {
+    if (script.target === "reply" && canType) {
+      if (ctx.reply.trim()) return sendHint(`step:${m}:typed`);
+      return {
+        id: `step:${m}`,
+        target: "reply",
+        pose: "point",
+        title: script.title,
+        body: script.body,
+        suggestion: script.typeText,
+        waiting: script.waiting,
+        primary: script.typeText ? TYPE_FOR_ME : undefined,
+      };
+    }
     return {
-      id: `step:${m}:${typed ? "typed" : "typing"}`,
-      target: "reply",
-      pose: "point",
-      title: typed ? "Now press send" : "Leads don't have to tap",
-      body: typed
-        ? "Kenzo reads typed answers like “2-3k” or “about £2k a month”, so leads can answer however they talk."
-        : `Try typing a budget under this agency's minimum of ${demoAgency.minimumLabel}, and see what Kenzo does.`,
-      suggestion: typed ? undefined : demoAgency.belowMinimumExample,
-      waiting: typed ? "Waiting for you to send" : "Waiting for you to type",
-      primary: typed ? undefined : { label: "Type it for me", action: "typeForMe" },
+      id: `step:${m}`,
+      target: script.target === "ask" ? "ask" : hasOptions ? "options" : "reply",
+      pose: script.target === "ask" ? "present" : "point",
+      title: script.title,
+      body: script.body,
+      waiting: script.waiting,
+      primary: hasOptions ? PICK_FOR_ME : undefined,
     };
   }
 
-  // Free-text or number steps with no options.
+  // A step the script doesn't cover (config changed): a sensible default.
   if (!hasOptions) {
     return {
       id: `step:${m}`,
@@ -236,52 +305,13 @@ function stepHint(
       waiting: "Waiting for your answer",
     };
   }
-
-  // Option steps: each one shows off something different.
-  const pick = { label: "Pick for me", action: "pickForMe" as const };
-  if (index === 0) {
-    return {
-      id: `step:${m}`,
-      target: "options",
-      pose: "point",
-      title: "No form, one question at a time",
-      body: multi
-        ? "Pick everything that applies, then press Continue. Each answer shapes what Kenzo asks next."
-        : "Pick any option. Each answer shapes what Kenzo asks next.",
-      waiting: "Waiting for your pick",
-      primary: pick,
-    };
-  }
-
-  const features: Hint[] = [];
-  if (question.why_we_ask) {
-    features.push({
-      id: `step:${m}`,
-      target: "options",
-      pose: "point",
-      title: "Leads can see why you ask",
-      body: "“Why do I ask?” under the question gives your reason in your words. Leads answer more honestly when they know why.",
-      waiting: "Pick an answer when you're ready",
-      primary: pick,
-    });
-  }
-  features.push({
-    id: `step:${m}`,
-    target: "options",
-    pose: "point",
-    title: "Questions are welcome mid-flow",
-    body: "Try “Ask Kenzo”, or type a question in the reply box. Kenzo answers from your own documents, then brings them back to this step.",
-    waiting: "Ask something, or pick an answer",
-    primary: pick,
-  });
-  features.push({
+  return {
     id: `step:${m}`,
     target: "options",
     pose: "point",
     title: multi ? "Pick everything that applies" : "Pick what fits",
     body: "Every answer is checked against your criteria as it comes in, so a poor fit never reaches your calendar.",
     waiting: "Waiting for your pick",
-    primary: pick,
-  });
-  return features[(index - 1) % features.length];
+    primary: PICK_FOR_ME,
+  };
 }
