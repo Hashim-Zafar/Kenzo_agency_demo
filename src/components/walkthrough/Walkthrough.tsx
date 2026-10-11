@@ -18,13 +18,20 @@ import { stepScript } from "@/lib/tour/demo-agency";
 const ALWAYS = new Set(["intro", "handoff", "ended", "limit", "error"]);
 
 type Stage = "agent" | SimStage;
+export type StartStage = Stage;
+
+/** A booking to start from when the tour skips past the booking step. */
+function defaultBooking(): Booking | null {
+  const day = bookingDays().find((d) => !d.weekend && freeTimes(d.key).length > 0);
+  return day ? { day, time: freeTimes(day.key)[0] } : null;
+}
 
 /** The customer's side: the live Kenzo, then booking, the confirmation email
  *  and the reminders (simulated), with Kenzo the guide on top. */
-export function Walkthrough() {
+export function Walkthrough({ initialStage = "agent" }: { initialStage?: Stage }) {
   const router = useRouter();
   const { state, start, send, explain, closeWhy } = useConversation();
-  const [stage, setStage] = useState<Stage>("agent");
+  const [stage, setStage] = useState<Stage>(initialStage);
   const [reply, setReply] = useState("");
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
   const [guideOn, setGuideOn] = useState(true);
@@ -35,7 +42,9 @@ export function Walkthrough() {
   // Simulated booking
   const [day, setDay] = useState<Day | null>(null);
   const [time, setTime] = useState<string | null>(null);
-  const [booking, setBooking] = useState<Booking | null>(null);
+  const [booking, setBooking] = useState<Booking | null>(() =>
+    initialStage === "confirmation" || initialStage === "reminders" ? defaultBooking() : null,
+  );
   const [booking_busy, setBookingBusy] = useState(false);
   const [remindersDone, setRemindersDone] = useState(false);
   const [playKey, setPlayKey] = useState(0);
