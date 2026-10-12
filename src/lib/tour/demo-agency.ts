@@ -49,11 +49,10 @@ export const demoAgency = {
     },
     start_timeline: {
       target: "options",
-      title: "Now try keeping your answer",
-      body: "Pick “Just exploring for now”. It's not what you're after, so Kenzo offers to talk it through. This time, say no.",
-      waiting: "Waiting for your pick",
-      pickValue: "exploring",
-      offerChoice: "decline_pursuit",
+      title: "No rule, still useful",
+      body: "Not every question has to pass or fail. This one has no rule: Kenzo just notes when they want to start, so your team knows who's ready now and who's still looking.",
+      waiting: "Pick when you'd start",
+      pickValue: "within_month",
     },
   } satisfies Record<string, StepScript>,
 

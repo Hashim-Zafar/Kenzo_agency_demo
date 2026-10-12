@@ -702,7 +702,7 @@ export function RulesScreen({ open, setOpen }: { open: number; setOpen: (n: numb
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm text-fg-subtle">{q.metric}</span>
                       <span className="text-xs text-fg-subtle">
-                        · {q.rule ? `${q.rule}${q.minimum ? ` (min viable £${Number(q.minimum).toLocaleString("en-GB")})` : ""}` : "No rule · used in the call brief"}
+                        · {q.rule ? `${q.rule}${q.minimum ? ` (warm from £${Number(q.minimum).toLocaleString("en-GB")})` : ""}` : "No rule · used in the call brief"}
                       </span>
                       {q.failure && (
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-fg-muted">
@@ -778,16 +778,16 @@ export function RulesScreen({ open, setOpen }: { open: number; setOpen: (n: numb
                             <span>
                               <strong>{f === "soft" ? "Soft" : "Hard"}</strong>
                               <br />
-                              <span className="text-xs text-fg-subtle">{f === "soft" ? "Not meeting it doesn’t end qualification on its own." : "Must be met to qualify."}</span>
+                              <span className="text-xs text-fg-subtle">{f === "soft" ? "Kenzo can talk it through before deciding." : "Must be met to qualify."}</span>
                             </span>
                           </label>
                         ))}
                       </div>
                       {q.minimum && (
                         <label className={`${field} max-w-[320px]`}>
-                          Minimum viable threshold
+                          Warm floor
                           <input className={fieldInput} defaultValue={q.minimum} />
-                          <span className="text-xs">The lowest answer you&apos;d still consider.</span>
+                          <span className="text-xs">From here up to the target, the lead still books, marked warm. Below it, Kenzo offers to talk it through.</span>
                         </label>
                       )}
                     </div>
@@ -864,7 +864,7 @@ export function RulesScreen({ open, setOpen }: { open: number; setOpen: (n: numb
                 <span>{q.rule ?? "No rule"}</span>
               </div>
             ))}
-            <div className="text-xs text-fg-subtle">Hard rules must all pass. Soft rules use the minimum viable threshold.</div>
+            <div className="text-xs text-fg-subtle">Hard rules must all pass. Soft rules use their warm floor; questions without a rule only feed the call brief.</div>
           </Card>
         </aside>
       </div>

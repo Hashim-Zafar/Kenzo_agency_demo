@@ -232,8 +232,8 @@ const CARDS: Card[] = [
           <div className="mt-0.5 text-sm text-fg-subtle">Thu 15 Oct, 11:00 · Meta — Lookalike</div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Chip>£3,000</Chip>
-            <Chip>This month</Chip>
-            <Chip>Decides: yes</Chip>
+            <Chip>Within the next month</Chip>
+            <Chip>Decides: I do</Chip>
           </div>
         </div>
         <div className={box}>
@@ -378,27 +378,27 @@ const CARDS: Card[] = [
     section: "Qualification rules",
     eyebrow: "Your questions, your rules",
     title: "Change the rules, no developer",
-    body: "The questions Kenzo just asked you. Hard rules must be met. Soft rules have a lowest answer you’d still consider, and Kenzo talks those leads through instead of turning them away.",
+    body: "The questions Kenzo just asked you. Soft rules have a floor: between it and your target the lead still books as warm, and below it Kenzo offers to talk it through instead of turning them away.",
     content: (
       <>
         <div className={box}>
-          <strong className="text-sm">1 · What do you need help with?</strong>
+          <strong className="text-sm">1 · Which of our services are you interested in?</strong>
           <div className={muted}>No rule · used in the call brief</div>
         </div>
         <div className={ringed}>
           <strong className="text-sm">2 · What is your monthly ad budget?</strong>
           <Row left={<span className="text-fg-subtle">Pass rule</span>} right="At least £3,000" />
-          <Row left={<span className="text-fg-subtle">Type</span>} right={<>Soft <span className="text-xs font-normal text-fg-subtle">· still consider from £2,000</span></>} />
-          <div className={`${muted} pt-1.5`}>Quick replies: £1,000 · £2,000 · £3,000 · £5,000+</div>
+          <Row left={<span className="text-fg-subtle">Type</span>} right={<>Soft <span className="text-xs font-normal text-fg-subtle">· warm from £2,000</span></>} />
+          <div className={`${muted} pt-1.5`}>Quick replies: £1,000 · £2,000 · £3,000 · £5,000 · £10,000+</div>
           <div className={`${muted} pt-1`}>Examples: “£1,500 a month”, “around 3k”</div>
         </div>
         <div className={box}>
-          <strong className="text-sm">3 · Who makes the final decision?</strong>
-          <div className={muted}>Not someone else · Soft</div>
+          <strong className="text-sm">3 · Who makes the final decision on working with an agency?</strong>
+          <div className={muted}>Not “Someone else decides” · Soft</div>
         </div>
         <div className={box}>
-          <strong className="text-sm">4 · When do you want to start?</strong>
-          <div className={muted}>Not just exploring · Soft</div>
+          <strong className="text-sm">4 · When would you like to get started?</strong>
+          <div className={muted}>No rule · used in the call brief</div>
         </div>
       </>
     ),
