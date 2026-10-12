@@ -2,7 +2,6 @@ import type { ConversationState } from "@/lib/kenzo/useConversation";
 import { labelFor } from "@/lib/kenzo/useConversation";
 import type { AnswerValue, ConversationAction, PublicQuestion } from "@/lib/kenzo/types";
 import type { MascotPose } from "@/components/mascot/Mascot";
-import { demoAgency, stepScript } from "./demo-agency";
 
 /** What the guide does when its button is pressed. */
 export type HintAction = "start" | "dismiss" | "pickForMe" | "typeForMe" | "restart" | "next" | "toAgency";
@@ -43,10 +42,11 @@ const TYPE_FOR_ME = { label: "Type it for me", action: "typeForMe" } as const;
 const PICK_FOR_ME = { label: "Pick for me", action: "pickForMe" } as const;
 
 /**
- * One guide per moment, worked out from what the Kenzo API actually returned
- * (the reply blocks and the conversation view), never from where a script
- * expects the visitor to be. The demo script only adds copy and suggestions
- * ("Pick for me", "Type it for me") on a step the visitor hasn't touched yet.
+ * One guide per moment, worked out ONLY from what the Kenzo API returned:
+ * the questions (type and options), the reply blocks and the conversation
+ * view. There is no per-question script: no metric names, thresholds or
+ * amounts live here, so changing the agency's config in the database never
+ * puts the tour out of step with what's on screen.
  *
  * Order of precedence:
  *   1. the conversation's own moments (intro, ending, limits, errors)
@@ -118,7 +118,6 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
   const metric = s.stepMetric;
   const question = s.questions.find((q) => q.metric === metric);
   if (!question || !metric) return null;
-  const script = stepScript(metric);
   const lastCodes = new Set(s.last.blocks.map((b) => b.code));
   const lastKinds = new Set(s.last.blocks.map((b) => b.kind));
 
@@ -141,30 +140,14 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
   const offered = (a: ConversationAction) => choices.some((c) => c.action === a);
 
   if (open && open.from === "kenzo" && open.kind === "pursuit_offer") {
-    // The script may steer which button to press, but only if the API offered it.
-    const choice = script?.offerChoice && offered(script.offerChoice) ? script.offerChoice : undefined;
-    const label = (a: ConversationAction) => choices.find((c) => c.action === a)?.label ?? "";
-    if (choice === "decline_pursuit") {
-      return {
-        id: `offer:${metric}:${s.turnNo}`,
-        target: "pursuit",
-        pose: "present",
-        title: "Leads are never pushed",
-        body: `Tap “${label(choice)}”. Kenzo keeps their answer and moves on, with no second attempt. Every lead gets a polite, respectful experience, even the ones who aren't a fit.`,
-        waiting: `Tap “${label(choice)}”`,
-        allowedActions: [choice],
-      };
-    }
+    const talk = choices.find((c) => c.action === "accept_pursuit")?.label;
     return {
       id: `offer:${metric}:${s.turnNo}`,
       target: "pursuit",
       pose: "present",
       title: "Below your floor, but not turned away",
-      body: choice
-        ? `Instead of a flat no, Kenzo offers to talk it through. Leads you'd have lost to a form get a second chance. Tap “${label(choice)}”.`
-        : "Instead of a flat no, Kenzo offers to talk it through. Leads you'd have lost to a form get a second chance.",
-      waiting: choice ? `Tap “${label(choice)}”` : "Your call",
-      allowedActions: choice ? [choice] : undefined,
+      body: "Instead of a flat no, Kenzo offers to talk it through. Leads you'd have lost to a form get a second chance, and nobody is pushed: either button is fine.",
+      waiting: talk ? `Try “${talk}”` : "Your call",
     };
   }
   if (open && open.from === "kenzo" && open.kind === "pursuit_choices") {
@@ -173,7 +156,9 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
       target: "pursuit",
       pose: "present",
       title: "Now Kenzo makes your case",
-      body: "It argues from offers and facts you've set up, never invented ones. The lead decides: take your number, or keep theirs.",
+      body: offered("pursuit_accept_alternative")
+        ? "It argues from offers and facts you've set up, never invented ones, and offers your smaller package as a middle ground. The lead decides."
+        : "It argues from offers and facts you've set up, never invented ones. The lead decides: take your number, or keep theirs.",
       waiting: "Your call",
     };
   }
@@ -192,9 +177,9 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
   if (pursuit?.stage === "pursuing") {
     const typed = ctx.reply.trim().length > 0;
     if (typed) return sendHint(`pursuing:${metric}:${s.turnNo}:typed`);
-    // Suggest the next scripted reply only on the scripted step.
+    // Something a lead might say; never a number, so it fits any config.
     const said = s.thread.filter((t) => t.from === "lead").length;
-    const sayNext = script?.typeText ? demoAgency.pursuitReplies[Math.max(0, said - 1)] : undefined;
+    const sayNext = PURSUIT_REPLIES[Math.max(0, said - 1)];
     const opener = lastCodes.has("pursuit_opener");
     return {
       id: `pursuing:${metric}:${s.turnNo}`,
@@ -265,8 +250,49 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
   // here, the script's suggestion no longer applies: just help them answer.
   const touched = s.thread.length > 0 || (s.last.rejected && s.last.sent !== "ask_kenzo");
   if (touched) return plainStepHint(question, `step:${metric}:again:${s.turnNo}`, ctx);
-  if (script?.target === "ask" && s.asks.length > 0) return plainStepHint(question, `step:${metric}:after-ask`, ctx, script.pickValue !== undefined);
-  return stepHint(question, script, ctx);
+
+  // Once, from the third question on: show that leads can ask anything.
+  const index = s.questions.indexOf(question);
+  if (index >= 2 && s.asks.length === 0 && !ctx.dismissed.has(ASK_TIP)) {
+    return {
+      id: `${ASK_TIP}:${metric}`,
+      target: "ask",
+      pose: "present",
+      title: "Leads can ask anything, mid-flow",
+      body: "“Ask Kenzo” answers from your own documents and keeps their place in the questions. Questions get answered before the call, so your team doesn't spend it on basics. Try it, or skip ahead.",
+      primary: { label: "Skip", action: "dismiss" },
+    };
+  }
+  return stepHint(question, ctx);
+}
+
+/** Dismissing the Ask Kenzo tip is remembered under this id. */
+export const ASK_TIP = "ask-tip";
+
+/** Replies a lead might give while talking it through. No numbers on purpose. */
+const PURSUIT_REPLIES = ["Mostly cash flow, it's tight at the moment", "What would I actually get for the extra?"];
+
+/** Options whose values are all numbers (budget bands and the like). */
+export function numericOptions(q: PublicQuestion): number[] | null {
+  if (q.options.length === 0 || !q.options.every((o) => typeof o.value === "number")) return null;
+  return q.options.map((o) => o.value as number);
+}
+
+/**
+ * What "Type it for me" types on a numeric question: an amount a little under
+ * the lowest option, written the way a lead would ("around £800 a month").
+ * Built from the options the API sent, so it follows the agency's config.
+ */
+export function typedSuggestion(q: PublicQuestion): string | undefined {
+  const nums = numericOptions(q);
+  if (!nums) return undefined;
+  const lowest = Math.min(...nums);
+  const label = q.options.find((o) => o.value === lowest)?.label ?? "";
+  const currency = label.match(/^[£$€]/)?.[0] ?? "";
+  const step = lowest >= 1000 ? 100 : lowest >= 100 ? 50 : 1;
+  const amount = Math.max(step, Math.round((lowest * 0.8) / step) * step);
+  const monthly = /month/i.test(q.question) ? " a month" : "";
+  return `around ${currency}${amount.toLocaleString("en-GB")}${monthly}`;
 }
 
 /** Shown while a turn is in flight: nothing stale, nothing to press. */
@@ -322,46 +348,30 @@ function pickedHint(question: PublicQuestion, suggested: AnswerValue): Hint {
   };
 }
 
-function stepHint(
-  question: PublicQuestion,
-  script: ReturnType<typeof stepScript>,
-  ctx: HintContext,
-): Hint {
+function stepHint(question: PublicQuestion, ctx: HintContext): Hint {
   const m = question.metric;
   const hasOptions = question.options.length > 0 || question.answer_type === "boolean";
   const multi = question.answer_type === "multi_choice";
+  const canType = question.allows_text || question.answer_type === "text";
 
   // "Pick for me" filled something in: point at Continue.
   if (ctx.suggested !== null && hasOptions) return pickedHint(question, ctx.suggested);
+  if (ctx.reply.trim() && canType) return sendHint(`step:${m}:typed`);
 
-  const canType = question.allows_text || question.answer_type === "text";
-
-  if (script) {
-    if (script.target === "reply" && canType) {
-      if (ctx.reply.trim()) return sendHint(`step:${m}:typed`);
-      return {
-        id: `step:${m}`,
-        target: "reply",
-        pose: "point",
-        title: script.title,
-        body: script.body,
-        suggestion: script.typeText,
-        waiting: script.waiting,
-        primary: script.typeText ? TYPE_FOR_ME : undefined,
-      };
-    }
+  // A number question that also takes free text: show typing an answer.
+  const typed = canType ? typedSuggestion(question) : undefined;
+  if (typed) {
     return {
       id: `step:${m}`,
-      target: script.target === "ask" ? "ask" : hasOptions ? "options" : "reply",
-      pose: script.target === "ask" ? "present" : "point",
-      title: script.title,
-      body: script.body,
-      waiting: script.waiting,
-      primary: hasOptions ? PICK_FOR_ME : undefined,
+      target: "reply",
+      pose: "point",
+      title: "Leads answer in their own words",
+      body: "Instead of tapping an option, try typing an amount the way a lead would. Kenzo reads it and checks it against your criteria straight away.",
+      suggestion: typed,
+      waiting: "Waiting for you to type",
+      primary: TYPE_FOR_ME,
     };
   }
-
-  // A step the script doesn't cover (config changed): a sensible default.
   if (!hasOptions) {
     return {
       id: `step:${m}`,
@@ -377,8 +387,10 @@ function stepHint(
     target: "options",
     pose: "point",
     title: multi ? "Pick everything that applies" : "Pick what fits",
-    body: "Every answer is checked against your criteria as it comes in, so a poor fit never reaches your calendar.",
-    waiting: "Waiting for your pick",
+    body: multi
+      ? "Leads choose from your real options, so every enquiry reaches you already tagged for the right person. No “other” box, no guessing."
+      : "Every answer is checked against your criteria as it comes in, so a poor fit never reaches your calendar.",
+    waiting: multi ? "Pick one or more, then Continue" : "Waiting for your pick",
     primary: PICK_FOR_ME,
   };
 }

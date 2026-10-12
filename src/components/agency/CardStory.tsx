@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Strip } from "@/components/tour/Guide";
-import { AGENCY_DOMAIN, costs, dropoff, funnel, kpis, notQualified, recovered, sarah, sources } from "@/lib/agency/sample";
+import { AGENCY_DOMAIN, BUDGET, costs, dropoff, funnel, kpis, notQualified, recovered, sarah, sources } from "@/lib/agency/sample";
 import type { Hint } from "@/lib/tour/hints";
 
 /*
@@ -70,7 +70,7 @@ const CARDS: Card[] = [
           {[
             ["When", "Thu 15 Oct 2026, 11:00 am"],
             ["Wants", "Paid social, Google Ads"],
-            ["Budget", "£3,000 / mo"],
+            ["Budget", `${BUDGET.target} / mo`],
             ["Decides", "She does"],
             ["Handler", sarah.booking.handler],
           ].map(([k, v]) => (
@@ -97,7 +97,7 @@ const CARDS: Card[] = [
         </div>
         {[
           ["Situation", ["Physio clinic in Leeds, 6 staff. Wants more private patients.", "Ran Meta ads herself; stopped after 2 months."]],
-          ["Budget", ["Opened at £1,500. Agreed £3,000 after talking it through."]],
+          ["Budget", [`Opened at ${BUDGET.sarahOpened}. Agreed ${BUDGET.target} after talking it through.`]],
           ["Concerns", ["Last agency “got clicks, no bookings”."]],
           ["Suggested opening", ["Recap her goal, then show how you report bookings."]],
           ["Couldn’t answer", ["Contract length. Have your terms ready."]],
@@ -231,7 +231,7 @@ const CARDS: Card[] = [
           </div>
           <div className="mt-0.5 text-sm text-fg-subtle">Thu 15 Oct, 11:00 · Meta — Lookalike</div>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <Chip>£3,000</Chip>
+            <Chip>{BUDGET.target}</Chip>
             <Chip>Within the next month</Chip>
             <Chip>Decides: I do</Chip>
           </div>
@@ -241,7 +241,7 @@ const CARDS: Card[] = [
             <strong>Tom Reid</strong>
             <span className="text-sm font-semibold text-fg-muted">Qualified</span>
           </div>
-          <div className="text-sm text-fg-subtle">Not booked yet · £4,000</div>
+          <div className="text-sm text-fg-subtle">Not booked yet · £2,500</div>
         </div>
         <div className={box}>
           <div className="flex justify-between">
@@ -387,10 +387,10 @@ const CARDS: Card[] = [
         </div>
         <div className={ringed}>
           <strong className="text-sm">2 · What is your monthly ad budget?</strong>
-          <Row left={<span className="text-fg-subtle">Pass rule</span>} right="At least £3,000" />
-          <Row left={<span className="text-fg-subtle">Type</span>} right={<>Soft <span className="text-xs font-normal text-fg-subtle">· warm from £2,000</span></>} />
-          <div className={`${muted} pt-1.5`}>Quick replies: £1,000 · £2,000 · £3,000 · £5,000 · £10,000+</div>
-          <div className={`${muted} pt-1`}>Examples: “£1,500 a month”, “around 3k”</div>
+          <Row left={<span className="text-fg-subtle">Pass rule</span>} right={`At least ${BUDGET.target}`} />
+          <Row left={<span className="text-fg-subtle">Type</span>} right={<>Soft <span className="text-xs font-normal text-fg-subtle">· warm from {BUDGET.floor}</span></>} />
+          <div className={`${muted} pt-1.5`}>Or offers the {BUDGET.alternative.label}, from {BUDGET.alternative.from}</div>
+          <div className={`${muted} pt-1`}>Examples: “£800 a month”, “around 1.5k”</div>
         </div>
         <div className={box}>
           <strong className="text-sm">3 · Who makes the final decision on working with an agency?</strong>

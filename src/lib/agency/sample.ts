@@ -2,8 +2,25 @@
  * Sample data for the agency's side of the tour. All made up: Northpoint Media
  * is a fictional agency, and the phone number is from Ofcom's drama range.
  * It follows on from the customer side: Sarah Khan typed a budget under the
- * floor, talked it through, agreed £3,000 and booked a call.
+ * floor, talked it through, agreed the target and booked a call.
  */
+
+/**
+ * The demo agency's budget rule, mirrored from its config (monthly_budget:
+ * target £1,500, warm from £1,000, Foundations package as the alternative).
+ * Every amount on the agency side reads from here: change it in one place.
+ */
+export const BUDGET = {
+  target: "£1,500",
+  floor: "£1,000",
+  sarahOpened: "£800",
+  sarahGap: "£700",
+  alternative: {
+    label: "Foundations package",
+    from: "£1,000",
+    description: "One platform, one offer, a simpler testing plan and monthly reporting, from £1,000 a month in ad spend.",
+  },
+} as const;
 
 export const AGENCY = "Northpoint Media";
 export const AGENCY_DOMAIN = "northpointmedia.co.uk";
@@ -33,15 +50,15 @@ export const dropoff = [
 
 /** Only the rules the demo agency actually has: budget and decision-maker. */
 export const notQualified = [
-  { label: "Budget under £2,000, didn't talk it through", p: 46 },
+  { label: `Budget under ${BUDGET.floor}, didn't talk it through`, p: 46 },
   { label: "Kept their budget after talking it through", p: 31 },
   { label: "Someone else decides", p: 23 },
 ];
 
 export const recovered = [
-  { name: "Sarah K.", note: "£1,500 → £3,000" },
+  { name: "Sarah K.", note: `${BUDGET.sarahOpened} → ${BUDGET.target}` },
   { name: "Dan P.", note: "Asked to discuss → booked" },
-  { name: "Priya M.", note: "£2,200 → £3,000" },
+  { name: "Priya M.", note: `£700 → ${BUDGET.alternative.label}` },
 ];
 
 export const sources = [
@@ -75,22 +92,22 @@ export type Lead = {
 };
 
 export const leads: Lead[] = [
-  { name: "Sarah Khan", status: "Booked", detail: "Thu 15 Oct, 11:00", source: "Meta — Lookalike", budget: "£3,000", timeline: "Within the next month", dm: "I do", date: "Today 09:14" },
-  { name: "Tom Reid", status: "Qualified", detail: "not booked yet", source: "Google — Search", budget: "£4,000", timeline: "In 1-3 months", dm: "I do", date: "Today 08:02" },
+  { name: "Sarah Khan", status: "Booked", detail: "Thu 15 Oct, 11:00", source: "Meta — Lookalike", budget: "£1,500", timeline: "Within the next month", dm: "I do", date: "Today 09:14" },
+  { name: "Tom Reid", status: "Qualified", detail: "not booked yet", source: "Google — Search", budget: "£2,500", timeline: "In 1-3 months", dm: "I do", date: "Today 08:02" },
   { name: "Amy Brooks", status: "In progress", detail: "question 2 of 4", source: "Organic / direct", budget: "—", timeline: "—", dm: "—", date: "Today 07:40" },
-  { name: "Lucy Hart", status: "Disqualified", detail: "budget", source: "Meta — Broad", budget: "£600", timeline: "Just exploring for now", dm: "Someone else", date: "Yesterday" },
-  { name: "Dan Patel", status: "Attended", detail: "met 3 Oct", source: "Meta — Lookalike", budget: "£3,000", timeline: "Within the next month", dm: "I do", date: "Yesterday" },
-  { name: "Jon Lee", status: "No-show", detail: "missed 1 Oct · follow-up sent", source: "Google — Search", budget: "£2,800", timeline: "In 1-3 months", dm: "I do", date: "1 Oct" },
-  { name: "Priya Mehta", status: "Booked", detail: "Fri 16 Oct, 14:30", source: "Meta — Lookalike", budget: "£3,000", timeline: "Within the next month", dm: "With a partner", date: "1 Oct" },
-  { name: "Mark Owen", status: "Disqualified", detail: "kept budget", source: "Meta — Broad", budget: "£900", timeline: "Just exploring for now", dm: "Someone else", date: "30 Sep" },
-  { name: "Ella Moss", status: "Attended", detail: "met 29 Sep", source: "Google — Search", budget: "£5,000", timeline: "Within the next month", dm: "I do", date: "29 Sep" },
-  { name: "Kofi Mensah", status: "Qualified", detail: "not booked yet", source: "Meta — Lookalike", budget: "£3,200", timeline: "In 1-3 months", dm: "I do", date: "29 Sep" },
-  { name: "Hannah Cole", status: "Disqualified", detail: "someone else decides", source: "Meta — Broad", budget: "£2,600", timeline: "Within the next month", dm: "Someone else", date: "28 Sep" },
-  { name: "Ryan Doyle", status: "No-show", detail: "missed 27 Sep · rebooked", source: "Organic / direct", budget: "£3,000", timeline: "In 1-3 months", dm: "I do", date: "27 Sep" },
-  { name: "Zara Ahmed", status: "Attended", detail: "met 26 Sep", source: "Google — Search", budget: "£4,500", timeline: "Within the next month", dm: "I do", date: "26 Sep" },
-  { name: "Ben Turner", status: "Disqualified", detail: "budget", source: "Meta — Broad", budget: "£400", timeline: "Just exploring for now", dm: "I do", date: "25 Sep" },
-  { name: "Grace Liu", status: "Booked", detail: "Mon 19 Oct, 10:00", source: "Meta — Lookalike", budget: "£3,000", timeline: "Within the next month", dm: "I do", date: "25 Sep" },
-  { name: "Omar Farah", status: "Disqualified", detail: "budget", source: "Google — Search", budget: "£2,000", timeline: "In 1-3 months", dm: "I do", date: "24 Sep" },
+  { name: "Lucy Hart", status: "Disqualified", detail: "budget", source: "Meta — Broad", budget: "£400", timeline: "Just exploring for now", dm: "Someone else", date: "Yesterday" },
+  { name: "Dan Patel", status: "Attended", detail: "met 3 Oct", source: "Meta — Lookalike", budget: "£1,500", timeline: "Within the next month", dm: "I do", date: "Yesterday" },
+  { name: "Jon Lee", status: "No-show", detail: "missed 1 Oct · follow-up sent", source: "Google — Search", budget: "£1,200", timeline: "In 1-3 months", dm: "I do", date: "1 Oct" },
+  { name: "Priya Mehta", status: "Booked", detail: "Fri 16 Oct, 14:30", source: "Meta — Lookalike", budget: "£1,000", timeline: "Within the next month", dm: "With a partner", date: "1 Oct" },
+  { name: "Mark Owen", status: "Disqualified", detail: "kept budget", source: "Meta — Broad", budget: "£600", timeline: "Just exploring for now", dm: "Someone else", date: "30 Sep" },
+  { name: "Ella Moss", status: "Attended", detail: "met 29 Sep", source: "Google — Search", budget: "£3,000", timeline: "Within the next month", dm: "I do", date: "29 Sep" },
+  { name: "Kofi Mensah", status: "Qualified", detail: "not booked yet", source: "Meta — Lookalike", budget: "£2,000", timeline: "In 1-3 months", dm: "I do", date: "29 Sep" },
+  { name: "Hannah Cole", status: "Disqualified", detail: "someone else decides", source: "Meta — Broad", budget: "£1,500", timeline: "Within the next month", dm: "Someone else", date: "28 Sep" },
+  { name: "Ryan Doyle", status: "No-show", detail: "missed 27 Sep · rebooked", source: "Organic / direct", budget: "£1,500", timeline: "In 1-3 months", dm: "I do", date: "27 Sep" },
+  { name: "Zara Ahmed", status: "Attended", detail: "met 26 Sep", source: "Google — Search", budget: "£2,500", timeline: "Within the next month", dm: "I do", date: "26 Sep" },
+  { name: "Ben Turner", status: "Disqualified", detail: "budget", source: "Meta — Broad", budget: "£300", timeline: "Just exploring for now", dm: "I do", date: "25 Sep" },
+  { name: "Grace Liu", status: "Booked", detail: "Mon 19 Oct, 10:00", source: "Meta — Lookalike", budget: "£1,500", timeline: "Within the next month", dm: "I do", date: "25 Sep" },
+  { name: "Omar Farah", status: "Disqualified", detail: "budget", source: "Google — Search", budget: "£500", timeline: "In 1-3 months", dm: "I do", date: "24 Sep" },
 ];
 
 /** Sarah's conversation, as the dashboard shows it. A flag marks a moment. */
@@ -103,13 +120,13 @@ export const sarah = {
     { who: "Kenzo", t: "09:14", text: "Hi Sarah, happy to help. Which of our services are you interested in?" },
     { who: "Sarah", t: "09:14", text: "Paid social and Google Ads for my physio clinic. Mainly private patients." },
     { who: "Kenzo", t: "09:15", text: "Got it. Roughly what monthly budget do you have for ads?" },
-    { who: "Sarah", t: "09:15", text: "Around £1,500 a month." },
-    { flag: "Below minimum · £1,500 vs £3,000" },
-    { who: "Kenzo", t: "09:15", text: "Thanks for being upfront. Clinics we work with usually start at £3,000 a month. At that level a similar practice got 38% more private bookings in three months. Is that within reach?" },
-    { who: "Sarah", t: "09:16", text: "What would the extra £1,500 actually go on?" },
-    { who: "Kenzo", t: "09:16", text: "More reach on Meta and Google when people search for physio, and new ads tested every fortnight. Below £3,000 there isn’t enough spend to learn what works." },
-    { who: "Sarah", t: "09:17", text: "Ok, £3,000 is fine if the results are there." },
-    { flag: "Recovered · budget now £3,000" },
+    { who: "Sarah", t: "09:15", text: `Around ${BUDGET.sarahOpened} a month.` },
+    { flag: `Below your floor · ${BUDGET.sarahOpened} vs ${BUDGET.floor}` },
+    { who: "Kenzo", t: "09:15", text: `Thanks for being upfront. Clinics we work with usually start at ${BUDGET.target} a month. At that level a similar practice got 38% more private bookings in three months. Is that within reach?` },
+    { who: "Sarah", t: "09:16", text: `What would the extra ${BUDGET.sarahGap} actually go on?` },
+    { who: "Kenzo", t: "09:16", text: `More reach on Meta and Google when people search for physio, and new ads tested every fortnight. Below ${BUDGET.target} there isn’t enough spend to learn what works. If that’s too much right now, our ${BUDGET.alternative.label} starts from ${BUDGET.alternative.from}.` },
+    { who: "Sarah", t: "09:17", text: `Ok, ${BUDGET.target} is fine if the results are there.` },
+    { flag: `Recovered · budget now ${BUDGET.target}` },
     { who: "Kenzo", t: "09:17", text: "Who makes the final decision on working with an agency?" },
     { who: "Sarah", t: "09:17", text: "I do, it is my clinic." },
     { who: "Kenzo", t: "09:17", text: "And when would you like to get started?" },
@@ -120,14 +137,14 @@ export const sarah = {
   ] satisfies ConvoLine[],
   brief: [
     { h: "Situation", items: ["Owns a 6-person physio clinic in Leeds; mostly NHS referrals today.", "Wants more private patients from paid social and Google. Gets about 12 a month now.", "Ran Meta ads herself last year; stopped after 2 months."] },
-    { h: "Budget", items: ["Opened at £1,500/mo. Agreed £3,000 after Kenzo explained what the extra spend buys.", "Said “fine if the results are there”, so expect questions about guarantees."] },
+    { h: "Budget", items: [`Opened at ${BUDGET.sarahOpened}/mo. Agreed ${BUDGET.target} after Kenzo explained what the extra spend buys.`, "Said “fine if the results are there”, so expect questions about guarantees."] },
     { h: "Concerns", items: ["A previous agency “got clicks, no bookings”. Lead with how you report bookings, not reach.", "Wants to know who does the creative."] },
     { h: "Suggested opening", items: ["Recap her goal in one line, then walk through the clinic case study numbers."] },
     { h: "Unanswered", items: ["Contract length — not in your knowledge base. Have your standard terms ready."] },
   ],
   qualification: [
     { q: "Service", a: "Paid social, Google Ads", rule: "Offered service" },
-    { q: "Monthly budget", a: "£3,000", rule: "At least £3,000" },
+    { q: "Monthly budget", a: BUDGET.target, rule: `At least ${BUDGET.target}` },
     { q: "Decision-maker", a: "I do", rule: "Not someone else" },
     { q: "Start", a: "Within the next month", rule: "No rule" },
   ],
@@ -177,6 +194,8 @@ export type RuleQuestion = {
   threshold: string;
   failure: "soft" | "hard" | null;
   minimum: string | null;
+  /** Offered instead of the target while talking it through. */
+  alternative?: string;
   options: { label: string; value: string }[];
   examples: string[];
 };
@@ -194,14 +213,15 @@ export const rules: RuleQuestion[] = [
     examples: ["Facebook and Instagram ads", "Google search ads", "a new website"],
   },
   {
-    metric: "monthly_ad_budget", question: "What is your monthly ad budget?", answerType: "Number",
+    metric: "monthly_budget", question: "What is your monthly ad budget?", answerType: "Number",
     description: "What the lead spends, or is ready to spend, on ads each month.", purpose: "Our strategies are built around ad spend, so this tells us what we can realistically achieve for you.",
-    rule: "≥ £3,000", operator: "At least (≥)", threshold: "3000", failure: "soft", minimum: "2000",
+    rule: `≥ ${BUDGET.target}`, operator: "At least (≥)", threshold: "1500", failure: "soft", minimum: "1000",
+    alternative: `${BUDGET.alternative.label}: ${BUDGET.alternative.description}`,
     options: [
-      { label: "£1,000", value: "1000" }, { label: "£2,000", value: "2000" }, { label: "£3,000", value: "3000" },
-      { label: "£5,000", value: "5000" }, { label: "£10,000+", value: "10000" },
+      { label: "£500", value: "500" }, { label: "£1,000", value: "1000" }, { label: "£1,500", value: "1500" },
+      { label: "£2,500", value: "2500" }, { label: "£5,000+", value: "5000" },
     ],
-    examples: ["£1,500 a month", "around 3k", "about 2 grand"],
+    examples: ["£800 a month", "around 1.5k", "about a grand"],
   },
   {
     metric: "decision_maker", question: "Who makes the final decision on working with an agency?", answerType: "Pick one",

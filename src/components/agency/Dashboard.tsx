@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   AGENCY,
   AGENCY_DOMAIN,
+  BUDGET,
   costDay,
   costs,
   documents,
@@ -180,7 +181,7 @@ export function InboxScreen({ email }: { email: "booked" | "brief" }) {
                     <dd className="m-0 font-semibold">Paid social, Google Ads</dd>
                     <dt className="text-fg-subtle">Budget</dt>
                     <dd className="m-0 font-semibold">
-                      £3,000 / mo <span className="font-normal text-fg-subtle">(agreed after talking it through)</span>
+                      {BUDGET.target} / mo <span className="font-normal text-fg-subtle">(agreed after talking it through)</span>
                     </dd>
                     <dt className="text-fg-subtle">Decides</dt>
                     <dd className="m-0 font-semibold">She does</dd>
@@ -783,6 +784,13 @@ export function RulesScreen({ open, setOpen }: { open: number; setOpen: (n: numb
                           </label>
                         ))}
                       </div>
+                      {q.alternative && (
+                        <label className={field}>
+                          Alternative offer
+                          <input className={fieldInput} defaultValue={q.alternative} />
+                          <span className="text-xs">Kenzo may offer this instead of the target while talking it through.</span>
+                        </label>
+                      )}
                       {q.minimum && (
                         <label className={`${field} max-w-[320px]`}>
                           Warm floor

@@ -11,8 +11,7 @@ import { Guide } from "@/components/tour/Guide";
 import { useConversation } from "@/lib/kenzo/useConversation";
 import type { AnswerValue, ConversationAction, Interaction } from "@/lib/kenzo/types";
 import { bookingDays, freeTimes, type Booking, type Day } from "@/lib/sim/booking";
-import { deriveHint, simHint, type SimStage } from "@/lib/tour/hints";
-import { stepScript } from "@/lib/tour/demo-agency";
+import { ASK_TIP, deriveHint, simHint, type SimStage } from "@/lib/tour/hints";
 
 /** Tips that show even with the guide hidden. */
 const ALWAYS = new Set(["intro", "handoff", "ended", "limit", "error"]);
@@ -114,7 +113,8 @@ export function Walkthrough({ initialStage = "agent" }: { initialStage?: Stage }
         restart();
         break;
       case "dismiss":
-        setDismissed((d) => new Set(d).add(hint.id));
+        // The Ask Kenzo tip is shown once, whichever step it appeared on.
+        setDismissed((d) => new Set(d).add(hint.id.startsWith(ASK_TIP) ? ASK_TIP : hint.id));
         break;
       case "next":
         if (stage === "agent") setStage("booking");
@@ -140,13 +140,13 @@ export function Walkthrough({ initialStage = "agent" }: { initialStage?: Stage }
           return;
         }
         if (!question) return;
-        // The script's pick, but only values the API actually offers.
-        const offered = (v: unknown) => question.options.some((o) => o.value === v);
-        const raw = stepScript(question.metric)?.pickValue;
-        const scripted = Array.isArray(raw) ? raw.filter(offered) : raw !== undefined && offered(raw) ? raw : undefined;
-        const first =
-          question.options[0]?.value ?? (question.answer_type === "boolean" ? true : null);
-        const pick = Array.isArray(scripted) && scripted.length === 0 ? first : (scripted ?? first);
+        // Only values the API offered: the first option, or the first two
+        // where several can be picked. Never sent: the visitor presses Continue.
+        const values = question.options.map((o) => o.value);
+        const pick: AnswerValue | null =
+          question.answer_type === "multi_choice"
+            ? values.slice(0, 2)
+            : (values[0] ?? (question.answer_type === "boolean" ? true : null));
         if (pick === null || pick === undefined) return;
         const multi = question.answer_type === "multi_choice";
         const value: AnswerValue = multi ? (Array.isArray(pick) ? pick : [pick]) : Array.isArray(pick) ? pick[0] : pick;
