@@ -24,6 +24,10 @@ export type Hint = {
   allowedActions?: ConversationAction[];
   /** A turn is in flight: show only "Kenzo is thinking", nothing to press. */
   thinking?: boolean;
+  /** Small label above the title (defaults to "Your customer's view"). */
+  eyebrow?: string;
+  /** Show a Back button next to the primary one. */
+  back?: boolean;
 };
 
 export type HintContext = {

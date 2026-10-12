@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Mascot, type MascotPose } from "@/components/mascot/Mascot";
 import type { Hint } from "@/lib/tour/hints";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 type Rect = { top: number; left: number; width: number; height: number };
 type Layout = {
@@ -11,20 +12,6 @@ type Layout = {
   tail: { side: "left" | "right" | "top" | "bottom" | "none"; offset: number };
   mascot: { x: number; y: number; pose: MascotPose } | null;
 };
-
-const MOBILE_QUERY = "(max-width: 767px)";
-
-function useIsMobile(): boolean {
-  return useSyncExternalStore(
-    (cb) => {
-      const mq = window.matchMedia(MOBILE_QUERY);
-      mq.addEventListener("change", cb);
-      return () => mq.removeEventListener("change", cb);
-    },
-    () => window.matchMedia(MOBILE_QUERY).matches,
-    () => false,
-  );
-}
 
 function cssPx(name: string, fallback: number): number {
   const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
@@ -45,10 +32,12 @@ function sameRect(a: Rect | null, b: Rect | null) {
 export function Guide({
   hint,
   onPrimary,
+  onBack,
   busy,
 }: {
   hint: Hint;
   onPrimary: () => void;
+  onBack?: () => void;
   busy: boolean;
 }) {
   const mobile = useIsMobile();
@@ -125,7 +114,7 @@ export function Guide({
   /* ---- A turn is in flight: a quiet note, nothing stale on screen ---- */
   if (hint.thinking) {
     return mobile ? (
-      <Strip hint={hint} onPrimary={onPrimary} busy={busy} rect={null} />
+      <Strip hint={hint} onPrimary={onPrimary} onBack={onBack} busy={busy} rect={null} />
     ) : (
       <div role="status" className="fixed bottom-6 left-1/2 z-(--z-bubble) flex -translate-x-1/2 items-center gap-3 rounded-full border-(length:--border-width-default) border-line-strong bg-surface py-2 pr-5 pl-2 shadow-bubble animate-pop">
         <span className="size-9 shrink-0 overflow-hidden rounded-full border-strong border-accent bg-accent-soft">
@@ -140,7 +129,7 @@ export function Guide({
   /* ---- Phones: a strip with its own space at the bottom. Nothing is dimmed
          or covered; a ring marks what Kenzo is talking about. ---- */
   if (mobile && !(centred && !hint.target)) {
-    return <Strip hint={hint} onPrimary={onPrimary} busy={busy} rect={rect} />;
+    return <Strip hint={hint} onPrimary={onPrimary} onBack={onBack} busy={busy} rect={rect} />;
   }
 
   const bubble = (
@@ -151,7 +140,7 @@ export function Guide({
       aria-live="polite"
       className={`flex flex-col gap-3 rounded-card border-(length:--border-width-default) border-line-strong bg-surface p-5 text-fg ${mobile && !centred ? "shadow-dock" : "shadow-bubble"}`}
     >
-      <span className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">Your customer&apos;s view</span>
+      <span className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">{hint.eyebrow ?? "Your customer’s view"}</span>
       <p className="m-0 text-base font-semibold leading-snug">{hint.title}</p>
       {hint.body && <p className="m-0 text-sm leading-relaxed text-fg-muted">{hint.body}</p>}
       {hint.suggestion && (
@@ -161,7 +150,11 @@ export function Guide({
       )}
       {(hint.waiting || hint.primary) && (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {hint.waiting ? (
+          {hint.back && onBack ? (
+            <button type="button" onClick={onBack} className="min-h-10 rounded-control border-control bg-surface px-4 text-sm font-semibold hover:bg-surface-muted">
+              Back
+            </button>
+          ) : hint.waiting ? (
             <span className="flex items-center gap-2 text-sm text-fg-subtle">
               <i className="size-2 animate-pulse rounded-full bg-accent" aria-hidden="true" />
               {busy ? "Kenzo is thinking…" : hint.waiting}
@@ -261,7 +254,19 @@ export function Guide({
  * matching padding (--guide-strip-h), so the strip never covers what the
  * visitor just did. It rides above the on-screen keyboard.
  */
-function Strip({ hint, onPrimary, busy, rect }: { hint: Hint; onPrimary: () => void; busy: boolean; rect: Rect | null }) {
+export function Strip({
+  hint,
+  onPrimary,
+  onBack,
+  busy,
+  rect,
+}: {
+  hint: Hint;
+  onPrimary: () => void;
+  onBack?: () => void;
+  busy: boolean;
+  rect: Rect | null;
+}) {
   const [more, setMore] = useState(false);
   const [lift, setLift] = useState(0);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -340,13 +345,18 @@ function Strip({ hint, onPrimary, busy, rect }: { hint: Hint; onPrimary: () => v
         </div>
         {!hint.thinking && (hint.body || hint.primary) && (
           <div className="mt-2.5 flex items-center justify-between gap-2">
-            {hint.body ? (
-              <button type="button" onClick={() => setMore((m) => !m)} aria-expanded={more} className="min-h-10 rounded-control px-2 text-sm font-semibold text-fg-muted">
-                {more ? "Less" : "More"}
-              </button>
-            ) : (
-              <span />
-            )}
+            <span className="flex items-center gap-1">
+              {hint.back && onBack && (
+                <button type="button" onClick={onBack} className="min-h-10 rounded-control px-2 text-sm font-semibold text-fg-muted">
+                  Back
+                </button>
+              )}
+              {hint.body && (
+                <button type="button" onClick={() => setMore((m) => !m)} aria-expanded={more} className="min-h-10 rounded-control px-2 text-sm font-semibold text-fg-muted">
+                  {more ? "Less" : "More"}
+                </button>
+              )}
+            </span>
             {hint.primary ? (
               <button
                 type="button"
@@ -394,6 +404,7 @@ function place(
   const clampY = (y: number) => Math.min(Math.max(y, edge), vp.h - bh - edge);
 
   let side: "right" | "left" | "below" | "above";
+  let floating = false;
   let x: number;
   let y: number;
   const rightX = r.left + r.width + pad + gap;
@@ -407,21 +418,45 @@ function place(
     x = leftX;
     y = clampY(centreY - bh / 2);
   } else {
-    // No room beside it: below if it fits, otherwise above. Never on top of it.
+    // No room beside it: below if it fits, otherwise above.
     x = Math.min(Math.max(r.left + r.width / 2 - bw / 2, edge), vp.w - bw - edge);
     const belowY = r.top + r.height + pad + gap;
+    const aboveY = r.top - pad - gap - bh;
     if (belowY + bh <= vp.h - edge) {
       side = "below";
       y = belowY;
-    } else {
+    } else if (aboveY >= edge) {
       side = "above";
-      y = Math.max(r.top - pad - gap - bh, edge);
+      y = aboveY;
+    } else {
+      // The target fills the screen. Sit wherever the bubble covers the
+      // least of it, keeping clear of its top (titles live there).
+      const hit = { left: r.left - pad, top: r.top - pad, right: r.left + r.width + pad, bottom: r.top + r.height + pad };
+      const xs = [edge, vp.w - bw - edge, Math.min(Math.max(r.left + r.width + pad + gap, edge), vp.w - bw - edge)];
+      const ys = [edge, vp.h - bh - edge];
+      let best = Infinity;
+      side = "above";
+      y = vp.h - bh - edge;
+      for (const cx of xs) {
+        for (const cy of ys) {
+          const box = { left: cx, top: cy, right: cx + bw, bottom: cy + bh };
+          const covered = overlap(box, hit) + overlap(box, { ...hit, bottom: hit.top + 120 }) * 2;
+          if (covered < best) {
+            best = covered;
+            x = cx;
+            y = cy;
+          }
+        }
+      }
+      side = y + bh <= r.top ? "above" : "below";
+      floating = true;
     }
   }
 
   const tailX = Math.min(Math.max(r.left + r.width / 2 - x, 20), bw - 20);
-  const tail: Layout["tail"] =
-    side === "below"
+  const tail: Layout["tail"] = floating
+    ? { side: "none", offset: 0 }
+    : side === "below"
       ? { side: "top", offset: tailX }
       : side === "above"
         ? { side: "bottom", offset: tailX }

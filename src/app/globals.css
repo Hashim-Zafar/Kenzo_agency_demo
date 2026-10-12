@@ -71,6 +71,8 @@
   --step-list-width: 260px;
   --ask-panel-width: 340px; /* "Ask Kenzo" panel beside the step, larger screens */
   --question-column: 560px;
+  --dash-nav-width: 200px; /* agency dashboard sidebar */
+  --dash-max-width: 1440px; /* agency dashboard content */
 
   /* Layers */
   --z-frame: 1;
@@ -126,6 +128,12 @@
   --color-lead-bubble-fg: var(--white);
   --color-answer: var(--indigo-50);
   --color-answer-line: var(--indigo-200);
+
+  /* Agency dashboard charts */
+  --color-chart: var(--ink);
+  --color-chart-mid: var(--slate-400);
+  --color-chart-track: var(--slate-100);
+  --color-dash-nav: var(--slate-50);
 
   /* Status */
   --color-notice-bg: var(--warning-50);
@@ -209,5 +217,15 @@ body {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* The phone guide's highlight: a ring around a card, nothing dimmed. */
+@layer utilities {
+  .guide-ring {
+    box-shadow:
+      0 0 0 2px var(--color-page),
+      0 0 0 4px var(--spotlight-ring),
+      0 0 0 10px color-mix(in srgb, var(--spotlight-ring) 18%, transparent);
   }
 }

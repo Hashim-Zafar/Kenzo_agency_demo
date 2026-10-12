@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import { TourShell } from "@/components/tour/TourShell";
-import { agencyTour } from "@/lib/tour/tours";
+import { AgencyTour } from "@/components/agency/AgencyTour";
 
 export const metadata: Metadata = { title: "Your view · Kenzo" };
 
 export default function AgencyTourPage() {
-  return <TourShell tour={agencyTour} />;
+  return <AgencyTour />;
 }
