@@ -17,6 +17,15 @@ import { stepScript } from "@/lib/tour/demo-agency";
 /** Tips that show even with the guide hidden. */
 const ALWAYS = new Set(["intro", "handoff", "ended", "limit", "error"]);
 
+/**
+ * The scripted walkthrough over the live agent is switched OFF while the
+ * agent is tested by hand. With it off, only the tips above still show (start,
+ * the end of the conversation, limits and errors), every button stays usable,
+ * and nothing is picked or typed for you. Set to true to bring the step-by-step
+ * guide back. The booking, email and reminder stages are unaffected.
+ */
+const AGENT_WALKTHROUGH = false;
+
 type Stage = "agent" | SimStage;
 export type StartStage = Stage;
 
@@ -35,6 +44,7 @@ export function Walkthrough({ initialStage = "agent" }: { initialStage?: Stage }
   const [reply, setReply] = useState("");
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
   const [guideOn, setGuideOn] = useState(true);
+  const agentGuide = stage !== "agent" || AGENT_WALKTHROUGH;
   // What "Pick for me" selected; shown, never sent until the visitor presses Continue.
   const [suggestion, setSuggestion] = useState<{ metric: string; value: AnswerValue } | null>(null);
   const typingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -158,7 +168,7 @@ export function Walkthrough({ initialStage = "agent" }: { initialStage?: Stage }
     }
   };
 
-  const showGuide = hint && (guideOn || ALWAYS.has(hint.id));
+  const showGuide = hint && ((guideOn && agentGuide) || ALWAYS.has(hint.id));
 
   return (
     <div className="flex min-h-dvh flex-col bg-page text-fg">
@@ -177,9 +187,11 @@ export function Walkthrough({ initialStage = "agent" }: { initialStage?: Stage }
         <span className="flex-1" />
         {(state.phase !== "idle" || stage !== "agent") && (
           <>
-            <button type="button" onClick={() => setGuideOn((v) => !v)} className="min-h-10 rounded-control px-3 text-sm font-semibold text-fg-muted hover:bg-surface-muted">
-              {guideOn ? "Hide guide" : "Show guide"}
-            </button>
+            {agentGuide && (
+              <button type="button" onClick={() => setGuideOn((v) => !v)} className="min-h-10 rounded-control px-3 text-sm font-semibold text-fg-muted hover:bg-surface-muted">
+                {guideOn ? "Hide guide" : "Show guide"}
+              </button>
+            )}
             <button type="button" onClick={restart} className="min-h-10 rounded-control px-3 text-sm font-semibold text-fg-muted hover:bg-surface-muted">
               Start again
             </button>

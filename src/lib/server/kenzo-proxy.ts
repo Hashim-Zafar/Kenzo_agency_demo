@@ -12,6 +12,7 @@
  * Import this ONLY from route handlers (app/api/**), never from components.
  */
 
+import * as Sentry from "@sentry/nextjs";
 import { randomUUID } from "node:crypto";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -112,7 +113,11 @@ export async function callKenzo(
   body?: unknown,
 ): Promise<Response> {
   const env = readEnv();
-  if (!env) return json(503, { error: "demo_not_configured" });
+  const route = `${method} ${path.replace(UUID_IN_PATH, ":id")}`;
+  if (!env) {
+    report("error", "Kenzo demo is not configured", route, "not_configured");
+    return json(503, { error: "demo_not_configured" });
+  }
 
   try {
     const upstream = await fetch(`${env.apiUrl}${path}`, {
@@ -129,14 +134,55 @@ export async function callKenzo(
     });
 
     if (!PASS_THROUGH.has(upstream.status)) {
+      report("error", `Kenzo API returned ${upstream.status}`, route, "bad_status", upstream.status);
       return json(502, { error: "unavailable" });
     }
     const data: unknown = await upstream.json().catch(() => null);
-    if (data === null) return json(502, { error: "unavailable" });
+    if (data === null) {
+      report("error", "Kenzo API sent a body that isn't JSON", route, "bad_body", upstream.status);
+      return json(502, { error: "unavailable" });
+    }
+    // 400/422: the API refused what this site sent. That's a bug on one side.
+    if (upstream.status === 400 || upstream.status === 422) {
+      report("warning", `Kenzo API refused the request (${upstream.status})`, route, "refused", upstream.status, data);
+    }
     return json(upstream.status, data);
-  } catch {
+  } catch (err) {
+    const timedOut = err instanceof Error && err.name === "TimeoutError";
+    report("error", timedOut ? "Kenzo API timed out" : "Kenzo API unreachable", route, timedOut ? "timeout" : "unreachable");
     return json(504, { error: "unavailable" });
   }
+}
+
+const UUID_IN_PATH = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+/** Sends a problem with the Kenzo API to Sentry: the route, the status and
+ *  the API's error code only. Never the request body, ids or visitor text. */
+function report(
+  level: "error" | "warning",
+  message: string,
+  route: string,
+  problem: string,
+  status?: number,
+  data?: unknown,
+) {
+  const detail = (data as { detail?: unknown } | null)?.detail;
+  Sentry.captureMessage(message, {
+    level,
+    fingerprint: ["kenzo-api", route, problem, String(status ?? "")],
+    tags: { area: "kenzo-api", route, problem, upstream_status: status === undefined ? "none" : String(status) },
+    // A short string detail is an error code; anything else (e.g. validation
+    // lists that echo input) is reduced to its field paths.
+    extra: { api_error: typeof detail === "string" && detail.length <= 80 ? detail : fieldPaths(detail) },
+  });
+}
+
+function fieldPaths(detail: unknown): string[] | undefined {
+  if (!Array.isArray(detail)) return undefined;
+  return detail
+    .slice(0, 10)
+    .map((d) => (d && typeof d === "object" && Array.isArray((d as { loc?: unknown }).loc) ? (d as { loc: unknown[] }).loc.join(".") : ""))
+    .filter(Boolean);
 }
 
 /** A made-up visitor, so the demo never collects a real person's details. */

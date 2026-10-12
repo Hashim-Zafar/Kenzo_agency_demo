@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import type { ConversationView, Interaction, StartResponse, TurnResponse } from "./types";
 
 /** Browser -> the demo site's own server (never the Kenzo API directly). */
@@ -29,9 +30,48 @@ async function call<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> 
   }
 }
 
+/** Server-side failures (502/503/504) are already reported by the bridge;
+ *  rate limits are expected. Everything else is worth a look. */
+const EXPECTED = new Set([429, 502, 503, 504]);
+
+/** The shape of an interaction, never its text: what Sentry may keep. */
+function describe(i: Interaction): Record<string, string> {
+  const d: Record<string, string> = { type: i.type };
+  if ("action" in i && typeof i.action === "string") d.action = i.action;
+  if ("metric" in i && typeof i.metric === "string") d.metric = i.metric;
+  return d;
+}
+
+function track<T>(name: string, result: ApiResult<T>, shape?: Record<string, string>): ApiResult<T> {
+  const data = result.ok ? (result.data as { blocks?: { kind?: unknown }[] } | null) : null;
+  Sentry.addBreadcrumb({
+    category: "kenzo",
+    message: name,
+    level: result.ok ? "info" : "warning",
+    data: {
+      ...shape,
+      status: result.status,
+      ...(result.ok ? { blocks: (data?.blocks ?? []).map((b) => String(b.kind)).join(", ") } : { error: result.error }),
+    },
+  });
+  if (!result.ok && !EXPECTED.has(result.status)) {
+    Sentry.captureMessage(`Kenzo ${name} failed (${result.status || "network"})`, {
+      level: result.status === 0 ? "warning" : "error",
+      fingerprint: ["kenzo-client", name, String(result.status), result.error],
+      tags: { area: "kenzo-client", call: name, status: String(result.status), error_code: result.error.slice(0, 60) },
+      extra: shape,
+    });
+  }
+  return result;
+}
+
 export const kenzoDemo = {
-  start: () => call<StartResponse>("/api/demo/start", { method: "POST", body: "{}" }),
-  turn: (interaction: Interaction) =>
-    call<TurnResponse>("/api/demo/turn", { method: "POST", body: JSON.stringify(interaction) }),
-  state: () => call<ConversationView>("/api/demo/state"),
+  start: async () => track("start", await call<StartResponse>("/api/demo/start", { method: "POST", body: "{}" })),
+  turn: async (interaction: Interaction) =>
+    track(
+      "turn",
+      await call<TurnResponse>("/api/demo/turn", { method: "POST", body: JSON.stringify(interaction) }),
+      describe(interaction),
+    ),
+  state: async () => track("state", await call<ConversationView>("/api/demo/state")),
 };
