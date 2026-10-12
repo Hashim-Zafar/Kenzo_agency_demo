@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Mascot } from "@/components/mascot/Mascot";
-import { labelFor, type ConversationState, type ThreadItem } from "@/lib/kenzo/useConversation";
+import { labelFor, type AskItem, type ConversationState, type ThreadItem } from "@/lib/kenzo/useConversation";
 import {
   MAX_MESSAGE_CHARS,
   type AnswerValue,
@@ -37,11 +37,15 @@ export function LeadInterface(props: Props) {
   const index = state.questions.findIndex((q) => q.metric === state.stepMetric);
   const question = index >= 0 ? state.questions[index] : undefined;
   const site = `${slug(state.agencyName) || "agency"}.co.uk/book`;
+  const canAsk = Boolean(question) && !state.outcome;
+  const panelOpen = asking && canAsk;
 
   return (
     <section
       aria-label={`${state.agencyName || "Agency"} booking`}
-      className="relative z-(--z-frame) mx-auto flex w-full max-w-(--frame-max-width) flex-1 flex-col bg-surface md:min-h-[640px] md:flex-none md:rounded-frame md:border-default md:shadow-frame"
+      className={`relative z-(--z-frame) mx-auto flex w-full flex-1 flex-col bg-surface md:min-h-[640px] md:flex-none md:rounded-frame md:border-default md:shadow-frame ${
+        panelOpen ? "max-w-[calc(var(--frame-max-width)+var(--ask-panel-width))]" : "max-w-(--frame-max-width)"
+      }`}
     >
       {/* Browser chrome (larger screens only) */}
       <div className="hidden h-10 items-center gap-2 rounded-t-frame border-b-(length:--border-width-default) border-line bg-surface-muted px-4 md:flex" aria-hidden="true">
@@ -58,8 +62,9 @@ export function LeadInterface(props: Props) {
         <button
           type="button"
           data-tour="ask"
-          onClick={() => setAsking(true)}
-          disabled={!question}
+          onClick={() => setAsking((v) => !v)}
+          disabled={!canAsk}
+          aria-expanded={panelOpen}
           className="min-h-10 rounded-control border-control px-4 text-sm font-semibold transition hover:bg-surface-muted disabled:opacity-40 md:hidden"
         >
           Ask Kenzo
@@ -79,7 +84,7 @@ export function LeadInterface(props: Props) {
       )}
 
       <div className="flex min-h-0 flex-1">
-        <StepList state={state} index={index} onAsk={() => setAsking(true)} />
+        <StepList state={state} index={index} open={panelOpen} onAsk={() => setAsking((v) => !v)} />
 
         <main data-tour-zone="main" className="flex flex-1 justify-center overflow-y-auto px-4 py-6 md:items-center md:px-10 md:py-8">
           <div className="flex w-full max-w-(--question-column) flex-col gap-3">
@@ -92,14 +97,14 @@ export function LeadInterface(props: Props) {
                 question={question}
                 index={index}
                 total={state.questions.length}
-                asking={asking}
-                setAsking={setAsking}
               />
             ) : (
               <Loading />
             )}
           </div>
         </main>
+
+        {panelOpen && <AskPanel state={state} onAsk={props.onAsk} onClose={() => setAsking(false)} />}
       </div>
 
       {state.view?.pending_correction && !state.outcome && (
@@ -111,7 +116,7 @@ export function LeadInterface(props: Props) {
 
 /* ------------------------------------------------------------------ */
 
-function StepList({ state, index, onAsk }: { state: ConversationState; index: number; onAsk: () => void }) {
+function StepList({ state, index, open, onAsk }: { state: ConversationState; index: number; open: boolean; onAsk: () => void }) {
   return (
     <aside className="hidden w-(--step-list-width) shrink-0 flex-col gap-4 rounded-bl-frame border-r-(length:--border-width-default) border-line bg-surface-muted p-5 md:flex">
       <div className="flex items-center gap-3">
@@ -148,9 +153,12 @@ function StepList({ state, index, onAsk }: { state: ConversationState; index: nu
         data-tour="ask"
         onClick={onAsk}
         disabled={index < 0 || Boolean(state.outcome)}
-        className="mt-auto min-h-11 w-full rounded-button border-control bg-surface text-sm font-semibold transition hover:bg-surface-muted disabled:opacity-40"
+        aria-expanded={open}
+        className={`mt-auto min-h-11 w-full rounded-button text-sm font-semibold transition disabled:opacity-40 ${
+          open ? "border-strong border-accent bg-accent-soft text-accent-pressed" : "border-control bg-surface hover:bg-surface-muted"
+        }`}
       >
-        Ask Kenzo
+        {open ? "Close Ask Kenzo" : "Ask Kenzo"}
       </button>
     </aside>
   );
@@ -163,8 +171,6 @@ function QuestionStep(
     question: PublicQuestion;
     index: number;
     total: number;
-    asking: boolean;
-    setAsking: (v: boolean) => void;
   },
 ) {
   const { state, question, reply, setReply } = props;
@@ -173,7 +179,6 @@ function QuestionStep(
   const [picked, setPicked] = useState<Scalar[]>(() =>
     multi && Array.isArray(suggested) ? suggested : [],
   );
-  const [askText, setAskText] = useState("");
   const [numberText, setNumberText] = useState("");
   const busy = state.busy;
   const view = state.view;
@@ -203,15 +208,6 @@ function QuestionStep(
     if (!text || busy) return;
     props.onText(question.metric, text);
     setReply("");
-  };
-
-  const submitAsk = (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = askText.trim().slice(0, MAX_MESSAGE_CHARS);
-    if (!text || busy) return;
-    props.onAsk(text);
-    setAskText("");
-    props.setAsking(false);
   };
 
   const pick = (value: Scalar) => {
@@ -267,7 +263,7 @@ function QuestionStep(
           ))}
         </div>
       )}
-      {busy && <Typing />}
+      {busy && !state.asks.some((a) => a.status === "waiting") && <Typing />}
 
       {/* Confirm a value Kenzo read or pre-filled */}
       {confirming && state.prefill !== null && !pursuitOpen && (
@@ -373,30 +369,6 @@ function QuestionStep(
         </form>
       )}
 
-      {/* Ask Kenzo anything */}
-      {props.asking && (
-        <form onSubmit={submitAsk} className="flex flex-col gap-2 rounded-card border-default bg-surface-muted p-3">
-          <label className="text-sm font-semibold" htmlFor="ask-kenzo">
-            Ask Kenzo anything
-          </label>
-          <div className="flex items-center gap-2.5">
-            <input
-              id="ask-kenzo"
-              autoFocus
-              value={askText}
-              onChange={(e) => setAskText(e.target.value)}
-              maxLength={MAX_MESSAGE_CHARS}
-              placeholder="e.g. Do you work with clinics?"
-              className="h-12 min-w-0 flex-1 rounded-control border-control bg-surface px-4 text-base"
-            />
-            <SendButton disabled={busy || !askText.trim()} />
-          </div>
-          <button type="button" onClick={() => props.setAsking(false)} className="self-start text-sm text-fg-muted underline underline-offset-4">
-            Cancel
-          </button>
-        </form>
-      )}
-
       {state.error && (
         <p role="alert" className="m-0 rounded-card bg-danger-bg p-3 text-sm text-danger-fg">
           That didn&apos;t go through. Please try again.
@@ -495,6 +467,110 @@ function OutcomeCard({ text, kind }: { text: string | null; kind: "handoff" | "e
       {text && <p className="m-0 max-w-sm text-lg leading-relaxed">{text}</p>}
       {kind === "handoff" && (
         <span className="rounded-control bg-accent-soft px-4 py-2 text-sm font-semibold text-accent-pressed">Booking comes next</span>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * "Ask Kenzo": a panel beside the step on larger screens, a sheet over it on
+ * phones. Questions and answers stay here for the whole conversation, so the
+ * step itself never fills up with side questions.
+ */
+function AskPanel({ state, onAsk, onClose }: { state: ConversationState; onAsk: (message: string) => void; onClose: () => void }) {
+  const [text, setText] = useState("");
+  const input = useRef<HTMLInputElement>(null);
+  const end = useRef<HTMLDivElement>(null);
+  const last = state.asks.at(-1);
+
+  useEffect(() => input.current?.focus(), []);
+  useEffect(() => end.current?.scrollIntoView({ block: "end" }), [state.asks.length, last?.status]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const message = text.trim().slice(0, MAX_MESSAGE_CHARS);
+    if (!message || state.busy) return;
+    onAsk(message);
+    setText("");
+  };
+
+  return (
+    <>
+      {/* Phones: dim the step behind the sheet; tap it to close. */}
+      <div aria-hidden="true" onClick={onClose} className="fixed inset-0 z-(--z-scrim) bg-inverse/30 md:hidden" />
+      <aside
+        role="dialog"
+        aria-label="Ask Kenzo"
+        data-tour="ask-panel"
+        className="fixed inset-x-0 bottom-0 z-(--z-popup) flex max-h-[85dvh] flex-col rounded-t-frame bg-surface shadow-frame animate-rise md:static md:z-auto md:max-h-none md:w-(--ask-panel-width) md:shrink-0 md:animate-none md:rounded-none md:rounded-br-frame md:border-l-(length:--border-width-default) md:border-line md:bg-surface-muted md:shadow-none"
+      >
+        <header className="flex items-center gap-3 border-b-(length:--border-width-default) border-line px-4 py-3 md:px-5">
+          <Avatar />
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">Ask Kenzo</div>
+            <div className="truncate text-xs text-fg-subtle">Your place in the questions is kept</div>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close Ask Kenzo" className="flex size-10 items-center justify-center rounded-control text-fg-muted hover:bg-surface-muted md:hover:bg-surface">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </header>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4 md:px-5" aria-live="polite">
+          {state.asks.length === 0 && (
+            <p className="m-0 text-sm leading-relaxed text-fg-muted">
+              Ask anything about {state.agencyName || "us"}: services, prices, how working together looks. Kenzo answers from what {state.agencyName || "the agency"} has shared.
+            </p>
+          )}
+          {state.asks.map((a) => (
+            <AskEntry key={a.id} item={a} />
+          ))}
+          <div ref={end} />
+        </div>
+
+        <form onSubmit={submit} className="flex items-center gap-2.5 border-t-(length:--border-width-default) border-line px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-5">
+          <label className="min-w-0 flex-1">
+            <span className="sr-only">Your question for Kenzo</span>
+            <input
+              ref={input}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              maxLength={MAX_MESSAGE_CHARS}
+              placeholder="e.g. Do you work with clinics?"
+              className="h-12 w-full rounded-control border-control bg-surface px-4 text-base placeholder:text-fg-subtle"
+            />
+          </label>
+          <SendButton disabled={state.busy || !text.trim()} />
+        </form>
+      </aside>
+    </>
+  );
+}
+
+function AskEntry({ item }: { item: AskItem }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="max-w-[90%] self-end rounded-card rounded-br-tail bg-lead-bubble px-4 py-2.5 text-sm text-lead-bubble-fg">{item.question}</div>
+      {item.status === "waiting" && <Typing />}
+      {item.status === "failed" && <p className="m-0 text-sm text-danger-fg">That didn&apos;t go through. Please ask again.</p>}
+      {item.status === "answered" && (
+        <div
+          data-tour="ask-last"
+          className={`flex items-start gap-2.5 rounded-card p-3.5 text-sm leading-relaxed ${
+            item.tone === "warning" ? "bg-notice-bg text-notice-fg" : "border-(length:--border-width-default) border-answer-line bg-answer"
+          }`}
+        >
+          <Avatar />
+          <p className="m-0 whitespace-pre-line">{item.answer ?? "Kenzo couldn't answer that one. You can ask it on the call."}</p>
+        </div>
       )}
     </div>
   );

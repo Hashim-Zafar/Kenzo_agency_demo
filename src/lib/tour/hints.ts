@@ -209,7 +209,7 @@ export function deriveHint(s: ConversationState, ctx: HintContext): Hint | null 
   if (offScript && !ctx.dismissed.has(offScriptId)) {
     return {
       id: offScriptId,
-      target: "thread-last",
+      target: s.last.sent === "ask_kenzo" ? "ask-last" : "thread-last",
       pose: "thinking",
       title: s.last.sent === "ask_kenzo" ? "Answered from your documents" : "A question instead of an answer, that's fine",
       body: "Kenzo answered from your own documents and kept their place. Nothing made up, and the step is still waiting.",

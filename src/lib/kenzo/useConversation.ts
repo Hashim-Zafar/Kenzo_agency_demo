@@ -27,6 +27,16 @@ export type ThreadItem =
       choices: BlockChoice[] | null;
     };
 
+/** One question to "Ask Kenzo" and its answer. Kept for the whole
+ *  conversation, separate from the step, so the step stays uncluttered. */
+export type AskItem = {
+  id: number;
+  question: string;
+  answer: string | null;
+  tone: "neutral" | "warning";
+  status: "waiting" | "answered" | "failed";
+};
+
 export type Outcome = { kind: "handoff" | "ended"; text: string | null } | null;
 
 export type ConversationState = {
@@ -41,6 +51,8 @@ export type ConversationState = {
   prefill: AnswerValue | null;
   /** What happened on the step on screen, in order. */
   thread: ThreadItem[];
+  /** Questions asked through "Ask Kenzo", oldest first. */
+  asks: AskItem[];
   whyOpen: boolean;
   /** metric -> short label, for the step list. */
   answers: Record<string, string>;
@@ -61,6 +73,7 @@ const initial: ConversationState = {
   stepMetric: null,
   prefill: null,
   thread: [],
+  asks: [],
   whyOpen: false,
   answers: {},
   outcome: null,
@@ -158,6 +171,13 @@ function kenzoItem(b: Block): ThreadItem {
   };
 }
 
+/** Fill in the answer of the ask still waiting, if there is one. */
+function settleAsk(asks: AskItem[], patch: Partial<AskItem>): AskItem[] {
+  const i = asks.findLastIndex((a) => a.status === "waiting");
+  if (i < 0) return asks;
+  return asks.map((a, j) => (j === i ? { ...a, ...patch } : a));
+}
+
 function reducer(state: ConversationState, action: Action): ConversationState {
   switch (action.type) {
     case "start":
@@ -176,6 +196,10 @@ function reducer(state: ConversationState, action: Action): ConversationState {
         action.label && "metric" in action.interaction
           ? { ...state.answers, [action.interaction.metric]: action.label }
           : state.answers;
+      if (action.interaction.type === "ask_kenzo") {
+        const ask: AskItem = { id: nextId++, question: action.interaction.message, answer: null, tone: "neutral", status: "waiting" };
+        return { ...state, busy: true, error: null, asks: [...state.asks, ask] };
+      }
       const thread = action.echo
         ? [...state.thread, { id: nextId++, from: "lead" as const, text: action.echo }]
         : state.thread;
@@ -183,9 +207,23 @@ function reducer(state: ConversationState, action: Action): ConversationState {
     }
     case "turned": {
       const view = viewOf(action.data);
+      let blocks = action.data.blocks ?? [];
+      let asks = state.asks;
+      if (action.interaction.type === "ask_kenzo") {
+        // Kenzo's words go to the Ask panel; anything else (a step change,
+        // an ending) still applies to the conversation as usual.
+        const said = blocks.filter((b) => (b.kind === "generated" || b.kind === "message") && b.text && !b.choices?.length);
+        blocks = blocks.filter((b) => !said.includes(b));
+        asks = settleAsk(asks, {
+          answer: said.map((b) => b.text).join("\n\n") || null,
+          tone: said.some((b) => b.tone === "warning") ? "warning" : "neutral",
+          status: "answered",
+        });
+      }
       return {
         ...state,
-        ...applyBlocks(state, action.data.blocks ?? [], view),
+        asks,
+        ...applyBlocks(state, blocks, view),
         view,
         busy: false,
         turnNo: state.turnNo + 1,
@@ -196,12 +234,14 @@ function reducer(state: ConversationState, action: Action): ConversationState {
         },
       };
     }
-    case "failed":
-      if (action.status === 429) return { ...state, busy: false, phase: "limit", error: action.error };
+    case "failed": {
+      const asks = settleAsk(state.asks, { status: "failed" });
+      if (action.status === 429) return { ...state, asks, busy: false, phase: "limit", error: action.error };
       if (state.phase === "starting" || action.status === 404 || action.status === 503) {
-        return { ...state, busy: false, phase: "error", error: action.error };
+        return { ...state, asks, busy: false, phase: "error", error: action.error };
       }
-      return { ...state, busy: false, error: action.error };
+      return { ...state, asks, busy: false, error: action.error };
+    }
     case "toggleWhy":
       return { ...state, whyOpen: action.open ?? !state.whyOpen };
     case "clearError":

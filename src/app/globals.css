@@ -69,6 +69,7 @@
   /* Layout */
   --frame-max-width: 1000px;
   --step-list-width: 260px;
+  --ask-panel-width: 340px; /* "Ask Kenzo" panel beside the step, larger screens */
   --question-column: 560px;
 
   /* Layers */
