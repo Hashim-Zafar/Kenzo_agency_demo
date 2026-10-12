@@ -509,7 +509,7 @@ function AskPanel({ state, onAsk, onClose }: { state: ConversationState; onAsk: 
         role="dialog"
         aria-label="Ask Kenzo"
         data-tour="ask-panel"
-        className="fixed inset-x-0 bottom-0 z-(--z-popup) flex max-h-[85dvh] flex-col rounded-t-frame bg-surface shadow-frame animate-rise md:static md:z-auto md:max-h-none md:w-(--ask-panel-width) md:shrink-0 md:animate-none md:rounded-none md:rounded-br-frame md:border-l-(length:--border-width-default) md:border-line md:bg-surface-muted md:shadow-none"
+        className="fixed inset-x-0 bottom-(--guide-strip-h,0px) z-(--z-popup) flex max-h-[calc(85dvh-var(--guide-strip-h,0px))] flex-col rounded-t-frame bg-surface shadow-frame animate-rise md:static md:z-auto md:max-h-none md:w-(--ask-panel-width) md:shrink-0 md:animate-none md:rounded-none md:rounded-br-frame md:border-l-(length:--border-width-default) md:border-line md:bg-surface-muted md:shadow-none"
       >
         <header className="flex items-center gap-3 border-b-(length:--border-width-default) border-line px-4 py-3 md:px-5">
           <Avatar />

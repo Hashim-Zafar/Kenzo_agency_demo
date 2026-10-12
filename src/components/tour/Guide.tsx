@@ -10,7 +10,6 @@ type Layout = {
   bubble: { x: number; y: number };
   tail: { side: "left" | "right" | "top" | "bottom" | "none"; offset: number };
   mascot: { x: number; y: number; pose: MascotPose } | null;
-  dock: { top: number | null; bottom: number | null } | null;
 };
 
 const MOBILE_QUERY = "(max-width: 767px)";
@@ -90,7 +89,11 @@ export function Guide({
         )
         .filter((e): e is HTMLElement => Boolean(e));
       let next: Rect | null = null;
-      if (els.length) {
+      // On phones the Ask Kenzo sheet covers the step: don't ring something
+      // underneath it.
+      const sheet = mobile ? document.querySelector('[data-tour="ask-panel"]') : null;
+      const hidden = sheet !== null && els.some((e) => !sheet.contains(e));
+      if (els.length && !hidden) {
         if (!scrolled) {
           els[els.length - 1].scrollIntoView({ block: "center", behavior: "smooth" });
           scrolled = true;
@@ -114,10 +117,31 @@ export function Guide({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [hint.target, hint.id]);
+  }, [hint.target, hint.id, mobile]);
 
-  const layout = rect && viewport.w > 0 ? place(rect, size, viewport, hint.pose, mobile) : null;
+  const layout = rect && viewport.w > 0 ? place(rect, size, viewport, hint.pose) : null;
   const centred = !hint.target || !layout;
+
+  /* ---- A turn is in flight: a quiet note, nothing stale on screen ---- */
+  if (hint.thinking) {
+    return mobile ? (
+      <Strip hint={hint} onPrimary={onPrimary} busy={busy} rect={null} />
+    ) : (
+      <div role="status" className="fixed bottom-6 left-1/2 z-(--z-bubble) flex -translate-x-1/2 items-center gap-3 rounded-full border-(length:--border-width-default) border-line-strong bg-surface py-2 pr-5 pl-2 shadow-bubble animate-pop">
+        <span className="size-9 shrink-0 overflow-hidden rounded-full border-strong border-accent bg-accent-soft">
+          <Mascot pose="head" decorative className="mt-0.5 w-full" />
+        </span>
+        <span className="text-sm font-semibold">{hint.title}</span>
+        <i className="size-2 animate-pulse rounded-full bg-accent" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  /* ---- Phones: a strip with its own space at the bottom. Nothing is dimmed
+         or covered; a ring marks what Kenzo is talking about. ---- */
+  if (mobile && !(centred && !hint.target)) {
+    return <Strip hint={hint} onPrimary={onPrimary} busy={busy} rect={rect} />;
+  }
 
   const bubble = (
     <div
@@ -176,7 +200,7 @@ export function Guide({
   }
 
   const pad = cssPx("--spotlight-padding", 8);
-  const { spot, bubble: b, tail, mascot, dock } = layout;
+  const { spot, bubble: b, tail, mascot } = layout;
 
   return (
     <>
@@ -195,19 +219,6 @@ export function Guide({
         />
       )}
 
-      {mobile && dock ? (
-        <div
-          className="fixed inset-x-3 z-(--z-bubble) transition-all duration-(--duration-base) ease-kenzo"
-          style={{ top: dock.top ?? undefined, bottom: dock.bottom ?? undefined }}
-        >
-          <div className="flex items-start gap-3">
-            <span className="mt-1 size-(--dock-avatar) shrink-0 overflow-hidden rounded-full border-strong border-accent bg-accent-soft">
-              <Mascot pose="head" decorative className="mt-0.5 w-full" />
-            </span>
-            <div className="min-w-0 flex-1">{bubble}</div>
-          </div>
-        </div>
-      ) : (
         <>
           <div
             className="fixed left-0 top-0 z-(--z-bubble) w-(--bubble-width) transition-transform duration-(--duration-slow) ease-kenzo"
@@ -239,7 +250,118 @@ export function Guide({
             </div>
           )}
         </>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * The phone guide. It sits in its own space at the bottom: the page gets
+ * matching padding (--guide-strip-h), so the strip never covers what the
+ * visitor just did. It rides above the on-screen keyboard.
+ */
+function Strip({ hint, onPrimary, busy, rect }: { hint: Hint; onPrimary: () => void; busy: boolean; rect: Rect | null }) {
+  const [more, setMore] = useState(false);
+  const [lift, setLift] = useState(0);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  // Reserve the strip's height at the bottom of the page.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const set = () => root.style.setProperty("--guide-strip-h", `${el.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.setProperty("--guide-strip-h", "0px");
+    };
+  }, []);
+
+  // Stay above the keyboard.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const on = () => setLift(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    on();
+    vv.addEventListener("resize", on);
+    vv.addEventListener("scroll", on);
+    return () => {
+      vv.removeEventListener("resize", on);
+      vv.removeEventListener("scroll", on);
+    };
+  }, []);
+
+  const pad = 6;
+  return (
+    <>
+      {rect && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed z-(--z-scrim) rounded-(--spotlight-radius) transition-all duration-(--duration-base) ease-kenzo"
+          style={{
+            top: rect.top - pad,
+            left: rect.left - pad,
+            width: rect.width + pad * 2,
+            height: rect.height + pad * 2,
+            boxShadow: "0 0 0 var(--spotlight-ring-width) var(--spotlight-ring), 0 0 0 8px color-mix(in srgb, var(--spotlight-ring) 25%, transparent)",
+          }}
+        />
       )}
+      <div
+        ref={ref}
+        role={hint.thinking ? "status" : "dialog"}
+        aria-label="Kenzo's tip"
+        aria-live="polite"
+        className="fixed inset-x-0 bottom-0 z-(--z-bubble) border-t-(length:--border-width-default) border-line-strong bg-surface px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-dock"
+        style={{ transform: lift ? `translateY(${-lift}px)` : undefined }}
+      >
+        <div className="flex items-start gap-2.5">
+          <span className="size-(--dock-avatar) shrink-0 overflow-hidden rounded-full border-strong border-accent bg-accent-soft">
+            <Mascot pose="head" decorative className="mt-0.5 w-full" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="m-0 flex items-center gap-2 text-[15px] font-semibold leading-5">
+              {hint.title}
+              {hint.thinking && <i className="size-2 animate-pulse rounded-full bg-accent" aria-hidden="true" />}
+            </p>
+            {hint.body && (
+              <p className={`m-0 mt-1 text-[13px] leading-[19px] text-fg-muted ${more ? "" : "line-clamp-2"}`}>{hint.body}</p>
+            )}
+            {hint.suggestion && (
+              <span className="mt-2 inline-block rounded-control border-(length:--border-width-default) border-dashed border-accent-soft-line bg-accent-soft px-2.5 py-1 text-[13px] font-medium text-accent-pressed">
+                Try: “{hint.suggestion}”
+              </span>
+            )}
+          </div>
+        </div>
+        {!hint.thinking && (hint.body || hint.primary) && (
+          <div className="mt-2.5 flex items-center justify-between gap-2">
+            {hint.body ? (
+              <button type="button" onClick={() => setMore((m) => !m)} aria-expanded={more} className="min-h-10 rounded-control px-2 text-sm font-semibold text-fg-muted">
+                {more ? "Less" : "More"}
+              </button>
+            ) : (
+              <span />
+            )}
+            {hint.primary ? (
+              <button
+                type="button"
+                onClick={onPrimary}
+                disabled={busy && hint.primary.action !== "restart"}
+                className="min-h-10 rounded-control bg-accent px-4 text-sm font-semibold text-accent-fg transition hover:bg-accent-hover disabled:opacity-50"
+              >
+                {hint.primary.label}
+              </button>
+            ) : (
+              hint.waiting && <span className="text-sm text-fg-subtle">{hint.waiting}</span>
+            )}
+          </div>
+        )}
+      </div>
     </>
   );
 }
@@ -259,20 +381,10 @@ function place(
   size: { w: number; h: number },
   vp: { w: number; h: number },
   pose: Hint["pose"],
-  mobile: boolean,
 ): Layout {
   const pad = cssPx("--spotlight-padding", 8);
   const gap = 20;
   const edge = 16;
-
-  if (mobile) {
-    // Dock above the target when it sits low (reply box, keyboard open).
-    const low = r.top + r.height / 2 > vp.h * 0.55;
-    const dock = low
-      ? { top: Math.max(8, r.top - pad - 12 - size.h), bottom: null }
-      : { top: null, bottom: 12 };
-    return { spot: r, bubble: { x: 0, y: 0 }, tail: { side: "none", offset: 0 }, mascot: null, dock };
-  }
 
   const bw = size.w;
   const bh = size.h;
@@ -345,5 +457,5 @@ function place(
     }
   }
 
-  return { spot: r, bubble: { x, y }, tail, mascot, dock: null };
+  return { spot: r, bubble: { x, y }, tail, mascot };
 }

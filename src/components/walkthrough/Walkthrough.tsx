@@ -18,13 +18,12 @@ import { stepScript } from "@/lib/tour/demo-agency";
 const ALWAYS = new Set(["intro", "handoff", "ended", "limit", "error"]);
 
 /**
- * The scripted walkthrough over the live agent is switched OFF while the
- * agent is tested by hand. With it off, only the tips above still show (start,
- * the end of the conversation, limits and errors), every button stays usable,
- * and nothing is picked or typed for you. Set to true to bring the step-by-step
- * guide back. The booking, email and reminder stages are unaffected.
+ * The walkthrough over the live agent. Its tips follow the Kenzo API's own
+ * replies (see deriveHint), so they can't drift from what's on screen.
+ * Set to false to test the agent by hand: only the tips above still show
+ * (start, the end, limits and errors) and nothing is picked or typed for you.
  */
-const AGENT_WALKTHROUGH = false;
+const AGENT_WALKTHROUGH = true;
 
 type Stage = "agent" | SimStage;
 export type StartStage = Stage;
@@ -141,10 +140,13 @@ export function Walkthrough({ initialStage = "agent" }: { initialStage?: Stage }
           return;
         }
         if (!question) return;
-        const scripted = stepScript(question.metric)?.pickValue;
+        // The script's pick, but only values the API actually offers.
+        const offered = (v: unknown) => question.options.some((o) => o.value === v);
+        const raw = stepScript(question.metric)?.pickValue;
+        const scripted = Array.isArray(raw) ? raw.filter(offered) : raw !== undefined && offered(raw) ? raw : undefined;
         const first =
           question.options[0]?.value ?? (question.answer_type === "boolean" ? true : null);
-        const pick = scripted ?? first;
+        const pick = Array.isArray(scripted) && scripted.length === 0 ? first : (scripted ?? first);
         if (pick === null || pick === undefined) return;
         const multi = question.answer_type === "multi_choice";
         const value: AnswerValue = multi ? (Array.isArray(pick) ? pick : [pick]) : Array.isArray(pick) ? pick[0] : pick;
@@ -171,7 +173,7 @@ export function Walkthrough({ initialStage = "agent" }: { initialStage?: Stage }
   const showGuide = hint && ((guideOn && agentGuide) || ALWAYS.has(hint.id));
 
   return (
-    <div className="flex min-h-dvh flex-col bg-page text-fg">
+    <div className="flex min-h-dvh flex-col bg-page pb-(--guide-strip-h,0px) text-fg">
       <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b-(length:--border-width-default) border-line bg-page px-4 py-3 md:px-10">
         <Link href="/" className="font-display text-lg font-semibold text-brand md:text-xl">
           Kenzo

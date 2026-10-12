@@ -104,16 +104,17 @@ function viewOf(data: ConversationView): ConversationView {
   };
 }
 
-function applyBlocks(state: ConversationState, blocks: Block[], view: ConversationView) {
+function applyBlocks(state: ConversationState, blocks: Block[], view: ConversationView, keepChoices = false) {
   let stepMetric = state.stepMetric;
   let whyOpen = state.whyOpen;
   let prefill: AnswerValue | null = null;
   let outcome = state.outcome;
   const answers = { ...state.answers };
   // Old buttons can't be pressed twice: only this turn's blocks keep choices.
-  let thread: ThreadItem[] = state.thread.map((t) =>
-    t.from === "kenzo" && t.choices ? { ...t, choices: null } : t,
-  );
+  // A side question ("Ask Kenzo") leaves the step's open buttons as they are.
+  let thread: ThreadItem[] = keepChoices
+    ? state.thread
+    : state.thread.map((t) => (t.from === "kenzo" && t.choices ? { ...t, choices: null } : t));
 
   const moveTo = (metric: string | null) => {
     if (metric === stepMetric) return;
@@ -223,7 +224,7 @@ function reducer(state: ConversationState, action: Action): ConversationState {
       return {
         ...state,
         asks,
-        ...applyBlocks(state, blocks, view),
+        ...applyBlocks(state, blocks, view, action.interaction.type === "ask_kenzo"),
         view,
         busy: false,
         turnNo: state.turnNo + 1,
