@@ -65,8 +65,48 @@ function track<T>(name: string, result: ApiResult<T>, shape?: Record<string, str
   return result;
 }
 
+/** A cold API (free-tier sleep) or a stale database connection: worth one
+ *  more try. Never a 4xx: those are answers, not outages. */
+const RETRYABLE = new Set([0, 502, 503, 504]);
+const START_RETRY_DELAY_MS = 1_500;
+
+async function startOnce(): Promise<ApiResult<StartResponse>> {
+  return call<StartResponse>("/api/demo/start", { method: "POST", body: "{}" });
+}
+
+let warming: Promise<void> | null = null;
+
 export const kenzoDemo = {
-  start: async () => track("start", await call<StartResponse>("/api/demo/start", { method: "POST", body: "{}" })),
+  /** Wake the API ahead of time. Once per page load, never awaited by the
+   *  UI, never reported: failing here is expected while the API sleeps. */
+  warmup: (): Promise<void> => {
+    warming ??= fetch("/api/demo/warmup", {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+    }).then(
+      () => undefined,
+      () => undefined,
+    );
+    return warming;
+  },
+  /** Start a conversation. Retries ONCE on an outage-type failure, so the
+   *  visitor doesn't see "can't reach Kenzo" just because it was waking up.
+   *  Starting twice is harmless: an abandoned demo conversation. */
+  start: async () => {
+    let result = await startOnce();
+    if (!result.ok && RETRYABLE.has(result.status)) {
+      Sentry.addBreadcrumb({
+        category: "kenzo",
+        message: "start retry",
+        level: "info",
+        data: { status: result.status, error: result.error },
+      });
+      await new Promise((resolve) => setTimeout(resolve, START_RETRY_DELAY_MS));
+      result = await startOnce();
+    }
+    return track("start", result);
+  },
   turn: async (interaction: Interaction) =>
     track(
       "turn",

@@ -156,6 +156,33 @@ export async function callKenzo(
 
 const UUID_IN_PATH = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
+/** Long enough to wait out a sleeping free-tier API waking up. */
+const WARMUP_TIMEOUT_MS = 60_000;
+
+/**
+ * Wake the Kenzo API and everything behind it (database, model connections)
+ * before a visitor starts a conversation. The API's /warmup is public, reveals
+ * nothing and throttles itself to once per 30 s.
+ *
+ * Never reported to Sentry: while the API is asleep, a slow or failed warmup
+ * is the expected case, not a problem. If the API is really down, the start
+ * call that follows reports it.
+ */
+export async function warmKenzo(): Promise<boolean> {
+  const env = readEnv();
+  if (!env) return false;
+  try {
+    const res = await fetch(`${env.apiUrl}/warmup`, {
+      method: "GET",
+      cache: "no-store",
+      signal: AbortSignal.timeout(WARMUP_TIMEOUT_MS),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Sends a problem with the Kenzo API to Sentry: the route, the status and
  *  the API's error code only. Never the request body, ids or visitor text. */
 function report(
