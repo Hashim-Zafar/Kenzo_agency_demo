@@ -201,6 +201,13 @@ function QuestionStep(
         : [];
 
   const lastKenzo = [...state.thread].reverse().find((t) => t.from === "kenzo");
+  // A way out for the whole pursuit, not only when Kenzo pitches. Hidden while
+  // the pitch's own buttons (which include "Keep my answer") are on screen.
+  const showKeepAnswer =
+    pursuitStage === "pursuing" &&
+    !(lastKenzo?.from === "kenzo" && lastKenzo.kind === "pursuit_choices");
+  const keepAnswerAllowed =
+    props.allowedActions == null || props.allowedActions.includes("pursuit_keep_answer");
 
   const submitReply = (e: React.FormEvent) => {
     e.preventDefault();
@@ -367,6 +374,18 @@ function QuestionStep(
           </label>
           <SendButton disabled={busy || !reply.trim()} />
         </form>
+      )}
+
+      {showKeepAnswer && (
+        <button
+          type="button"
+          disabled={busy || !keepAnswerAllowed}
+          title={keepAnswerAllowed ? undefined : "Not part of this tour"}
+          onClick={() => props.onAction("pursuit_keep_answer", question.metric)}
+          className="self-start rounded-button px-1 text-sm font-semibold text-fg-subtle underline-offset-4 transition hover:text-fg hover:underline disabled:opacity-50"
+        >
+          Keep my answer and continue
+        </button>
       )}
 
       {state.error && (
