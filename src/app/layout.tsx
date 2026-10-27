@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { WarmKenzo } from "@/components/WarmKenzo";
 import "./globals.css";
 
 // Self-hosted, from the Kenzo design system (SIL Open Font License 1.1).
@@ -25,7 +26,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en-GB" className={`${aspekta.variable} ${unbounded.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        <WarmKenzo />
+        {children}
+      </body>
     </html>
   );
 }
